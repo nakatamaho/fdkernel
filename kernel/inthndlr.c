@@ -1780,6 +1780,7 @@ VOID ASMCFUNC int2F_12_handler(struct int2f12regs FAR *pr)
 {
   COUNT rc;
   long lrc;
+  UDWORD tsize;
 
 #define r (*pr)
 
@@ -1794,8 +1795,9 @@ VOID ASMCFUNC int2F_12_handler(struct int2f12regs FAR *pr)
       size = ~offs;                        /* BX for query HMA   */
       if (r.AL == 0x02)                    /* allocate HMA space */
       {
-        if (r.BX < size)
-          size = r.BX;
+        tsize = (r.BX + 0xf) & 0xfffffff0; /* align to paragraph */
+        if (tsize < size)
+          size = (UWORD)tsize;
         AllocateHMASpace(offs, offs+size);
         firstAvailableBuf += size;
       }
