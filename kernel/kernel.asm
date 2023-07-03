@@ -109,6 +109,8 @@ realentry:                              ; execution continues here
                 jmp     IGROUP:kernel_start
 beyond_entry:   times   256-(beyond_entry-entry) db 0
                                         ; scratch area for data (DOS_PSP)
+_master_env equ $ - 128
+global _master_env
 
 segment INIT_TEXT
 
