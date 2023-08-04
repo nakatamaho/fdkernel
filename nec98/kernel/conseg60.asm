@@ -29,6 +29,9 @@
 
 
 ; UBYTE  ASMCONPASCAL_FAR nec98_crt_set_mode_far(UBYTE mode)
+; mode=0 25lines
+;      1 20lines
+; todo: support 30line (PC-9821)
 		global	NEC98_CRT_SET_MODE_FAR
 NEC98_CRT_SET_MODE_FAR:
 		push	bp
@@ -38,8 +41,11 @@ arg_f mode
 		int	18h
 		xor	ah, ah
 		push	ax
+		mov	ah, [.mode]
+		and	ah, 01h
+		and	al, 01eh
+		or	al, ah
 		mov	ah, 0ah			; set CRT mode
-		mov	al, [.mode]
 		int	18h
 		mov	ah, 0ch			; CRT start displaying (text)
 		int	18h
