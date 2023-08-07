@@ -99,7 +99,7 @@
 /*
  *      Convienence macros
  */
-#define failure(x)      (S_ERROR+S_DONE+x)
+#define failure(x)      (COUNT)((unsigned)S_ERROR|S_DONE|(x))
 #ifndef TRUE
 #define TRUE            1
 #endif
