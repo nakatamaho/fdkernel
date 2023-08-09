@@ -418,7 +418,7 @@ STATIC WORD RWzero(ddt * pddt, UWORD mode)
   UWORD done;
 
   return LBA_Transfer(pddt, mode,
-                      (UBYTE FAR *) & DiskTransferBuffer,
+                      (UBYTE FAR *) DiskTransferBuffer,
                       pddt->ddt_offset, 1, &done);
 }
 
@@ -562,11 +562,11 @@ STATIC WORD RWzero_nec98(ddt * pddt, UWORD rwmode)
     if (ret != 0)
       continue;
 
-    ret = fl_readid(daua, &idinfo);
+    ret = fl_readid(daua, idinfo);
     if (ret >= 0xc0)
     {
       fl_reset(daua);
-      ret = fl_readid(daua, &idinfo);
+      ret = fl_readid(daua, idinfo);
     }
     if (ret != 0)
       continue;
@@ -1211,7 +1211,7 @@ STATIC WORD dskerr_nec98(COUNT code)
     case 0x10:    /* (0x10) DDAM Found (no error) */
 # endif
     case 0x20:    /* DMA boundary */
-      return S_ERROR | E_NOTRDY;
+      return (WORD)((unsigned)S_ERROR | E_NOTRDY);
     case 0x30:    /* ENd of cylinder */
       return failure(E_FAILURE);
     case 0x40:    /* Equipment Check */
