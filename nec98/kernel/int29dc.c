@@ -1470,7 +1470,7 @@ VOID ASMCFUNC intdc_main(iregs FAR *r)
       }
   }
 
-#if 1
+#if defined(I386) || defined(I186) || !defined(WITHFAT32)  /* workaround for XCPU=86, XFAT=32 */
   put_string("\nunimplemented internal dos function INTDC cx=");
   put_unsigned(r->CX, 16, 4);
   put_string("h ax=");
