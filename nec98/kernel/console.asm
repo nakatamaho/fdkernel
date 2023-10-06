@@ -505,10 +505,15 @@ init_crt:
 	%endif
 		db	0
 
+		global	_init_nec98_peekkey
+_init_nec98_peekkey:
+		mov	ah, 1
+		jmp	short _init_nec98_getkey.loc2
 		global	_init_nec98_getkey
 _init_nec98_getkey:
-		push	bx
 		mov	ah, 5
+.loc2:
+		push	bx
 		int	18h
 		sub	bh, 1
 		sbb	bx, bx
@@ -521,6 +526,12 @@ _init_nec98_getshiftstate:
 		mov	ah, 2
 		int	18h
 		mov	ah, 0
+		ret
+
+		global	_init_nec98_isshifted
+_init_nec98_isshifted:
+		call	_init_nec98_getshiftstate
+		and	al, 1
 		ret
 
 segment HMA_TEXT

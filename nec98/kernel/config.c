@@ -36,6 +36,19 @@ static BYTE *RcsId =
     "$Id: config.c 1705 2012-02-07 08:10:33Z perditionc $";
 #endif
 
+#if defined(NEC98)
+extern UWORD ASMCFUNC init_nec98_getkey(VOID);
+extern UWORD ASMCFUNC init_nec98_peekkey(VOID);
+extern UBYTE ASMCFUNC init_nec98_getshiftstate(VOID);
+extern int ASMCFUNC init_nec98_isshifted(VOID);
+# if defined(__WATCOMC__)
+#pragma aux init_nec98_getkey modify exact [ax]
+#pragma aux init_nec98_peekkey modify exact [ax]
+#pragma aux init_nec98_getshiftstate modify exact [ax]
+#pragma aux init_nec98_isshifted modify exact [ax]
+# endif
+#endif
+
 #if defined(IBMPC)
 # define VK_F5 0x3F00
 # define VK_F8 0x4200
@@ -891,12 +904,17 @@ VOID DoConfig(int nPass)
 #endif
   }
 
+#if !(DO_NOT_ALLOW_EMERGENCY_BOOTUP)
   if (nPass == 0)
   {
-    SkipLine_first(TRUE);
-    if (SkipAllConfig)
+    if (init_nec98_isshifted())
+    {
+      InitKernelConfig.SkipConfigSeconds = 0;
+      SkipAllConfig = TRUE;
       return;
+    }
   }
+#endif
 
   /* Check to see if we have a config.sys file.  If not, just     */
   /* exit since we don't force the user to have one (but 1st      */
@@ -1098,28 +1116,22 @@ STATIC VOID WaitVSync(int count)
 {
   while(count-->0) {
     while (my_inp(0xa0) & 0x20) ;
-	while (!(my_inp(0xa0) & 0x20)) ;
+    while (!(my_inp(0xa0) & 0x20)) ;
   }
 }
 
-extern UWORD ASMCFUNC init_nec98_getkey(VOID);
-extern UBYTE ASMCFUNC init_nec98_getshiftstate(VOID);
-
 UWORD GetBiosKey_nec98(int timeout_sec, int check_shift)
 {
-  long timeout;
-  UWORD key;
-  timeout = timeout_sec > 0 ? timeout_sec * 60 : 0;
-  do {
-    key = init_nec98_getkey();
-    if (key != 0xffff) break;
-    if (check_shift && (init_nec98_getshiftstate() & 1)) {
-      key = VK_F5;
-      break;
+  long timeout = timeout_sec * 60;
+  while(timeout >= 0) {
+    if (init_nec98_peekkey() != 0xffff) break;
+    if (check_shift && init_nec98_isshifted()) {
+      return VK_F5;
     }
     WaitVSync(1); /* wait approx. 1/60sec */
-  } while (timeout_sec < 0 || timeout--);
-  return key;
+    --timeout;
+  }
+  return init_nec98_getkey();
 }
 
 STATIC void SetTextColor_nec98(int attr)
@@ -1172,41 +1184,6 @@ UWORD GetBiosKey(int timeout)
 #error need platform specific BiosGetKey()
 #endif
 
-STATIC BOOL SkipLine_first(int check_shift)
-{
-  short key;
-
-  if (InitKernelConfig.SkipConfigSeconds > 0)
-    printf("Press F8 to trace or F5 to skip CONFIG.SYS/AUTOEXEC.BAT");
-
-  key = GetBiosKey2(InitKernelConfig.SkipConfigSeconds, check_shift);       /* wait 2 seconds */
-
-  if (key == VK_F5)          /* F5 */
-  {
-    SkipAllConfig = TRUE;
-  }
-  else if (key == VK_F8)     /* F8 */
-  {
-    singleStep = TRUE;
-  }
-
-  printf("\r%79s\r", "");     /* clear line */
-
-  if (SkipAllConfig)
-  {
-    STATIC BYTE disped_bypass = 0;
-    if (!disped_bypass)
-    {
-      disped_bypass = 1;
-      printf("Skipping CONFIG.SYS/AUTOEXEC.BAT\n");
-    }
-  }
-
-  InitKernelConfig.SkipConfigSeconds = -1;
-
-  return SkipAllConfig;
-}
-
 STATIC BOOL SkipLine(char *pLine)
 {
   short key;
@@ -1215,9 +1192,6 @@ STATIC BOOL SkipLine(char *pLine)
   if (InitKernelConfig.SkipConfigSeconds >= 0)
   {
 
-#if 1
-    SkipLine_first(0);
-#else
     if (InitKernelConfig.SkipConfigSeconds > 0)
       printf("Press F8 to trace or F5 to skip CONFIG.SYS/AUTOEXEC.BAT");
 
@@ -1238,7 +1212,6 @@ STATIC BOOL SkipLine(char *pLine)
 
     if (SkipAllConfig)
       printf("Skipping CONFIG.SYS/AUTOEXEC.BAT\n");
-#endif
   }
 
   if (SkipAllConfig)
