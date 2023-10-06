@@ -1070,6 +1070,17 @@ extern unsigned char  cdecl __inportb__(int);
 #elif defined(__WATCOMC__)
 extern unsigned char my_inp(int);
 #pragma aux my_inp = "in al, dx" parm [dx] value [al];
+#elif defined(__GNUC__)
+# define my_inp(__port) \
+  ({ \
+    register unsigned char __v; \
+    __asm__ volatile ( \
+      "inb %1, %0;" \
+      : "=Ral" (__v) \
+      : "d" (__port) \
+    ); \
+    __v; \
+  })
 #else
 STATIC unsigned char my_inp(int portid)
 {
