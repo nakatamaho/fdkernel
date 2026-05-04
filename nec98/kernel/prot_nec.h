@@ -39,12 +39,16 @@ VOID  ASMCON_FAR  nec98_clear_crt_all_far(VOID);
 VOID  ASMCONPASCAL_FAR nec98_put_crt_far(UBYTE x, UBYTE y, UWORD ccode);
 VOID  ASMCONPASCAL_FAR nec98_put_crt_wattr_far(UBYTE x, UBYTE y, UWORD ccode, UWORD attr);
 VOID  ASMCONPASCAL_FAR nec98_clear_crt_far(UBYTE x, UBYTE y);
+VOID  ASMCONPASCAL_FAR nec98_clear_crt_n_far(UBYTE x, UBYTE y, UWORD count);
 VOID  ASMCONPASCAL_FAR nec98_set_curpos_far(UBYTE x, UBYTE y);
 UWORD  ASMCONPASCAL_FAR nec98_show_hide_cursor_far(UBYTE showhide);
 VOID   ASMCONPASCAL_FAR nec98_update_cursor_view_far(VOID);
 
 UWORD  ASMCONPASCAL_FAR nec98_sjis2jis_far(UWORD sjis);
 
+VOID  ASMCONPASCAL_FAR nec98_put_func_index_far(UBYTE x, UBYTE y, UWORD index);
+VOID  ASMCON_FAR nec98_put_funcs_far(VOID);
+VOID  ASMCON_FAR nec98_clear_funcs_far(VOID);
 
 /* kernel.asm + supseg60.asm */
 # define ASMSUP  ASMCFUNC
@@ -86,6 +90,11 @@ VOID ASMSUPPASCAL_FAR nec98_sup_get_daua_list_far(VOID FAR *p);
 
 #pragma aux (pascal) nec98_sjis2jis_far modify exact [ax]
 
+#pragma aux (pascal) nec98_put_func_index_far modify exact [ax dx]
+#pragma aux nec98_put_funcs_far modify exact [ax]
+#pragma aux nec98_clear_funcs_far modify exact [ax]
+
+
 #pragma aux (pascal) nec98_sup_get_scsi_devices_far modify exact [ax]
 #pragma aux nec98_sup_get_machine_type_far modify exact [ax]
 #pragma aux (pascal) nec98_sup_get_daua_list_far modify exact [ax]
@@ -106,6 +115,10 @@ VOID ASMSUPPASCAL_FAR nec98_sup_get_daua_list_far(VOID FAR *p);
 # define clear_crt  nec98_clear_crt_far
 # define set_curpos nec98_set_curpos_far
 # define update_cursor_view  nec98_update_cursor_view_far
+# define sjis2jis  nec98_sjis2jis_far
+# define put_func_index  nec98_put_func_index_far
+# define put_funcs  nec98_put_funcs_far
+# define clear_funcs  nec98_clear_funcs_far
 #endif
 
 

@@ -77,9 +77,7 @@ STATIC int iskanji2(unsigned char c)
 #endif
 
 
-#if 1
-# define sjis2jis(c) nec98_sjis2jis_far(c)
-#else
+#if !defined(USE_PUTCRT_SEG60)
 STATIC UWORD sjis2jis(UWORD c)
 {
   UBYTE h = c >> 8;
@@ -110,13 +108,13 @@ STATIC UWORD sjis2jis(UWORD c)
 
   return ((UWORD)h << 8) | l;
 }
-#endif
 
-STATIC VOID put_func(UBYTE x, UBYTE y, UBYTE FAR *p)
+STATIC VOID put_func_index(UBYTE x, UBYTE y, UWORD index)
 {
   UBYTE cnt = 6;
   UBYTE clear_char = CLEAR_CHAR;
   UBYTE attr_r = CLEAR_ATTR ^ 4;  /* reverse */
+  CONST UBYTE FAR *p = programmable_key_table(index);
 
   if(*p == 0xfe)
   {
@@ -164,7 +162,7 @@ STATIC VOID put_funcs(void)
   put_crt_wattr(2, y, peekb(0x60, 0x8c), CLEAR_ATTR);
   for(i = 1; i <= 5; i++)
   {
-    put_func(x, y, programmable_key_table(i + ofs));
+    put_func_index(x, y, i + ofs);
     x += 6;
     clear_crt(x++, y);
   }
@@ -172,7 +170,7 @@ STATIC VOID put_funcs(void)
     clear_crt(x, y);
   for(; i <= 10; i++)
   {
-    put_func(x, y, programmable_key_table(i + ofs));
+    put_func_index(x, y, i + ofs);
     x += 6;
     clear_crt(x++, y);
   }
@@ -189,6 +187,8 @@ STATIC VOID clear_funcs(void)
   for(x = 0; x < width; x++)
     clear_crt(x, y);
 }
+
+#endif /* !defined(USE_PUTCRT_SEG60) */
 
 STATIC VOID show_function(void)
 {

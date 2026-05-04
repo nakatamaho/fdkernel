@@ -301,7 +301,7 @@ _cnvkey_dest:
 ; param
 ;  AX=index
 ; result
-; DX:BX = key table entry
+; (DX:)BX = key table entry
 ; ES      same as DX (key table segment)
 ; CX      length
 nec98_fetch_key_table:

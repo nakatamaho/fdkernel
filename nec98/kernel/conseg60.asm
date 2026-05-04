@@ -54,6 +54,8 @@ arg_f mode
 		retf	2
 
 
+%ifndef INCLUDE_SUPSEG60
+
 ; VOID  ASMCON_FAR push_cursor_pos_to_conin(VOID);
 ;		global _push_cursor_pos_to_conin
 _push_cursor_pos_to_conin:
@@ -100,6 +102,7 @@ _nec98_console_esc6n_far:
 		inc	bx
 		ret
 
+%endif ;(ifndef INCLUDE_SUPSEG60)
 
 
 
@@ -494,21 +497,32 @@ nec98_get_width:
 
 ; internal
 ; input:
-; ax = code, dl = X, dh = Y, cx=attr, flags:DF=0, ds=60h
-; result:
-; ax,dx:broken
-nec98_putcrta_noseg:
-		push	di
-		push	es
-		mov	es, [_text_vram_segment]
+; dl = X, dh = Y, ds=60h
+; result
+; di:vram addr
+nec98_xy_to_addr:
 		push	ax
-		mov	al, 80
+		push	dx
+		mov	al, 80		; columns
 		mul	dh
 		mov	dh, 0
 		add	ax, dx
 		shl	ax, 1
 		mov	di, ax
+		pop	dx
 		pop	ax
+		ret
+
+; internal
+; input:
+; ax = code, dl = X, dh = Y, cx=attr, flags:DF=0, ds=60h
+; result:
+; ax:broken
+nec98_putcrta_noseg:
+		push	di
+		push	es
+		mov	es, [_text_vram_segment]
+		call	nec98_xy_to_addr
 		stosw
 		add	di, 1ffeh
 		mov	ax, cx
@@ -562,6 +576,53 @@ arg_f posx, posy, ccode, attr
 		pop	bp
 		retf	8
 
+;
+nec98_crt_internal_clear_1:
+		mov	cx, 1
+nec98_crt_internal_clear_n:
+		jcxz	.exit
+		push	dx
+		push	di
+		push	ds
+		push	es
+		mov	ax, 60h
+		mov	ds, ax
+		call	nec98_xy_to_addr
+		mov	es, [_text_vram_segment]
+		xor	ah, ah
+		mov	al, [_clear_char]
+		push	cx
+		push	di
+		rep	stosw		; (40cols mode not supported for now)
+		pop	di
+		pop	cx
+		add	di, 2000h
+		mov	al, [_clear_attr]
+		rep	stosw
+		pop	es
+		pop	ds
+		pop	di
+		pop	dx
+.exit:
+		ret
+
+; VOID ASMCONPASCAL_FAR  nec98_clear_crt_n_far(UBYTE posx, UBYTE posy, UWORD count);
+NEC98_CLEAR_CRT_N_FAR:
+		cld
+		push	bp
+		mov	bp, sp
+arg_f posx, posy, count
+		push	cx
+		push	dx
+		mov	dl, [.posx]
+		mov	dh, [.posy]
+		mov	cx, [.count]
+		call	nec98_crt_internal_clear_n
+		pop	dx
+		pop	cx
+		pop	bp
+		retf	6
+
 ; VOID ASMCONPASCAL_FAR  nec98_clear_crt_far(UBYTE x, UBYTE y)
 		global	NEC98_CLEAR_CRT_FAR
 NEC98_CLEAR_CRT_FAR:
@@ -570,16 +631,9 @@ NEC98_CLEAR_CRT_FAR:
 arg_f posx, posy
 		push	cx
 		push	dx
-		push	ds
-		mov	ax, 60h
-		mov	ds, ax
-		xor	ch, ch
 		mov	dl, [.posx]
 		mov	dh, [.posy]
-		mov	al, [_clear_char]
-		mov	cl, [_clear_attr]
-		call	nec98_putcrta_noseg
-		pop	ds
+		call	nec98_crt_internal_clear_1
 		pop	dx
 		pop	cx
 		pop	bp
@@ -664,5 +718,208 @@ arg_f sjis
 		retf	2
 
 %endif ; USE_PUTCRT_SEG60
+
+%ifdef INCLUDE_CONKEY60
+; internal
+; input:
+; ax = index, dl = X, dh = Y, flags:DF=0, ds=60h
+; result:
+; ax,bx,cx,dx,es:broken
+nec98_crt_internal_putfunc:
+		push	dx
+		call	nec98_fetch_key_table	; es:bx=key, cx=length
+		cmp	cx, 6
+		jbe	.fixed_cx
+		mov	cx, 6
+.fixed_cx:
+		pop	dx
+		xor	si, si
+		xchg	si, bx			; bx=0, (es:)si=key
+		call	nec98_xy_to_addr
+		mov	es, [_text_vram_segment]
+; clear grid
+		push	cx
+		push	di
+		mov	cx, 6
+		mov	al, [_clear_attr]
+		xor	al, 4
+		xor	ah, ah
+		mov	dx, ax
+.lp_pre_clr:
+		mov	al, ' '		; space (not clear_char)
+		stosw
+		mov	al, dl
+		mov	[es: di + 1ffeh], dx
+		loop	.lp_pre_clr
+		pop	di
+		pop	cx
+		jcxz	.lp_brk
+;.lp_0
+		lodsb
+		cmp	al, 0feh	; check 1st FEh (will be always space)
+		jne	.lp_m1
+		xor	ah, ah
+		mov	al, ' '
+		jmp	short .lp_m1
+.lp:
+		cmp	bx, cx
+		jae	.lp_brk
+		lodsb
+.lp_m1:
+		xor	ah, ah
+		cmp	ah, [008ah]	; GRAPH mode?
+		je	.lp_s
+		cmp	al, 81h
+		jb	.lp_s
+		cmp	al, 9fh
+		jbe	.lp_d
+		cmp	al, 0e0h
+		jb	.lp_s
+		cmp	al, 0fch
+		ja	.lp_s
+.lp_d:
+		inc	bx
+		cmp	bx, cx
+		jb	.lp_d_2
+		mov	al, ' '
+		jmp	short .lp_s
+.lp_d_2:
+		mov	ah, al
+		lodsb
+		call	con_sjis2jis
+		sub	ax, 2000h
+		xchg	al, ah
+		stosw
+		or	al, 80h
+.lp_s:
+		stosw
+		inc	bx
+		jmp	short .lp
+.lp_brk:
+		ret
+
+nec98_crt_clrfuncline:
+		mov	ax, 0060h
+		mov	ds, ax
+		xor	dl, dl
+		mov	dh, [_scroll_bottom]
+		inc	dh
+		mov	cx, 80
+		call	nec98_crt_internal_clear_n
+		ret
+
+nec98_crt_putfuncline:
+		call	nec98_crt_clrfuncline	; and setup dx, ds, es
+		mov	dl, 1
+		xor	ch, ch
+		mov	cl, [_put_attr]
+		xor	ah, ah
+		mov	al, [_kanjigraph_char]
+		call	nec98_putcrta_noseg
+		inc	dl
+		xor	ah, ah
+		mov	al, [_shiftfunc_char]
+		call	nec98_putcrta_noseg
+		mov	al, 1
+		cmp	al, byte [_function_flag]
+		je	.l1
+		add	al, 10
+.l1:
+		mov	dl, 4
+		call	.disp_onegrid
+		mov	dl, 4 + 7*5 + 3
+.disp_onegrid:
+		mov	cx, 5
+.lp:
+		push	ax
+		push	cx
+		push	dx
+		call	nec98_crt_internal_putfunc
+		pop	dx
+		pop	cx
+		pop	ax
+		add	dl, 7
+		inc	ax
+		loop	.lp
+		ret
+
+  %ifndef INCLUDE_SUPSEG60
+
+; VOID ASMCONPASCAL_FAR nec98_put_func_index_far(UBYTE x, UBYTE y, UWORD index);
+		global NEC98_PUT_FUNC_INDEX_FAR
+NEC98_PUT_FUNC_INDEX_FAR:
+		push	bp
+		mov	bp, sp
+arg_f posx, posy, index
+		push	bx
+		push	cx
+		push	si
+		push	di
+		push	ds
+		push	es
+		mov	ax, 60h
+		mov	ds, ax
+		mov	dl, [.posx]
+		mov	dh, [.posy]
+		mov	ax, [.index]
+		call	nec98_crt_internal_putfunc
+		pop	es
+		pop	ds
+		pop	di
+		pop	si
+		pop	cx
+		pop	bx
+		pop	bp
+		retf	6
+
+; VOID  ASMCON_FAR nec98_put_funcs_far(VOID);
+		global _nec98_put_funcs_far
+_nec98_put_funcs_far:
+		push	bx
+		push	cx
+		push	dx
+		push	si
+		push	di
+		push	ds
+		push	es
+		cld
+		call	nec98_crt_putfuncline
+		pop	es
+		pop	ds
+		pop	di
+		pop	si
+		pop	dx
+		pop	cx
+		pop	bx
+		retf
+
+; VOID  ASMCON_FAR nec98_clear_funcs_far(VOID);
+		global _nec98_clear_funcs_far
+_nec98_clear_funcs_far:
+		push	bx
+		push	cx
+		push	dx
+		push	si
+		push	di
+		push	ds
+		push	es
+		cld
+		call	nec98_crt_clrfuncline
+		pop	es
+		pop	ds
+		pop	di
+		pop	si
+		pop	dx
+		pop	cx
+		pop	bx
+		retf
+
+  %endif ; (ifndef INCLUDE_SUPSEG60)
+
+
+; ax = code, dl = X, dh = Y, cx=attr, flags:DF=0, ds=60h
+
+
+%endif		; INCLUDE_CONKEY60
 
 %endif		; INCLUDE_CONSEG60
