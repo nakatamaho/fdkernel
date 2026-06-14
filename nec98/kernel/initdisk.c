@@ -27,6 +27,7 @@
 #include "portab.h"
 #include "debug.h"
 #include "init-mod.h"
+#include "prot_nec.h"
 #include "dyndata.h"
 
 /*

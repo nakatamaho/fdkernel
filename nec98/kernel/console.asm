@@ -406,6 +406,52 @@ init_crt:
 		mov	ah, 11h	; view cursor
 		int	18h
 
+%if 1; use conseg60
+		xor	ax, ax
+		mov	ds, ax
+		mov	al, 60h
+		xchg	ax, bx
+		mov	ah, [0458h]	; 0000:0458 BIOS_FLAG5
+		and	ah, 40h
+		mov	al, [0501h]	; 0000:0501
+		mov	ds, bx		; ds = 0060h
+		mov	[_crt_is_98gs], ah
+		xor	ah, ah
+		and	al, 28h		; bit5 and 3
+		test	al, 8		; bit3 1=hires 0=normal
+		jnz	.set_ishi
+		mov	al, 0
+		inc	ah
+.set_ishi:
+		mov	[_crt_is_hires], al
+		mov	[_crt_line], ah		; 0=hires 25lines, 1=normal 25lines
+		; if the result of AL and BH is `modified' with int 18h ah=31h,
+		; PC-9821 extend video mode may be supported...
+		mov	bh, 33h
+		mov	ax, 310fh
+		int	18h		; get crt mode (9821)
+		mov	ah, bh
+		xchg	ax, dx
+		mov	bh, 0
+		mov	ax, 3100h
+		int	18h		; get crt mode (9821)
+		mov	ah, bh
+		cmp	ax, dx
+		jne	.chk_21_end
+		mov	byte [_crt_has_mode21], 1
+		cmp	byte [_crt_is_98gs], 0
+		jne	.chk_21_2
+		and	al, 0fch	; 9821: ignore ext-sync and interlaced status
+.chk_21_2:
+		and	ax, 330fh
+		mov	[_crt_m9821_al_org], ax
+.chk_21_end:
+		mov	ah, 0bh
+		int	18h
+		and	al, 0bfh		; bit6=0 (to be safe...)
+		mov	[_crt_mode_org], al
+%endif
+
 	%ifdef INHERIT_CURSOR_POSITION
 		pushf
 		cli
@@ -435,14 +481,19 @@ init_crt:
 		mov	cx, 0
 	%endif
 
+%if 1 ; use conseg60
+		test	byte [_crt_is_hires], 8
+%else
 		xor	ax, ax
 		mov	ds, ax
 		test	byte [0501h], 8
 		mov	al, 60h			; ax = 0060h
 		mov	ds, ax
+%endif
 		mov	ax, 0a000h		; normal (A000)
 		jz	.set_vram
-		mov	ah, 0e0h		; hireso (E000)
+		mov	ah, 0e0h		; hires (E000)
+		mov	[_crt_line], al		; 0 = 25lines on hires
 	.set_vram:
 		mov	[_text_vram_segment], ax
 		mov	ax, cx
@@ -544,12 +595,9 @@ _get_crt_width:
 		mov	ds, ax
 
 		;xor	ah, ah
-		mov	al, [CRT_STS_FLAG]
-		test	al, 2
-		jz	.w80
 		mov	al, 40
-		jmp	short .end
-	.w80:
+		test	byte [CRT_STS_FLAG], 2
+		jnz	.end
 		mov	al, 80
 	.end:
 		pop	ds
@@ -559,6 +607,12 @@ _get_crt_width:
 ; UBYTE ASMCFUNC get_crt_height(VOID)
 		global	_get_crt_height
 _get_crt_height:
+%if 1
+		mov	ax, 0112h
+		call	iosys_peekb_watcall_
+		inc	al
+		ret
+%else
 		push	ds
 		mov	ax, 60h
 		mov	ds, ax
@@ -568,6 +622,29 @@ _get_crt_height:
 		inc	al
 
 		pop	ds
+		ret
+%endif
+
+; UBYTE ASMCON get_crt_posx(VOID);
+; UBYTE ASMCON get_crt_posy(VOID);
+		global	_get_crt_posx
+		global	_get_crt_posy
+		global	iosys_peekb_watcall_
+
+_get_crt_posx:
+		mov	ax, 011ch
+		jmp	short iosys_peekb_watcall_
+_get_crt_posy:
+		mov	ax, 0110h
+iosys_peekb_watcall_:
+		push	bx
+		push	ds
+		xchg	ax, bx
+		mov	ax, 60h
+		mov	ds, ax
+		mov	al, [bx]
+		pop	ds
+		pop	bx
 		ret
 
 ;--------------------------------------
@@ -731,9 +808,10 @@ _clear_crt:
 		pop	bp
 		ret
 
-%endif ; !USE_PUTCRT_SEG60
+%endif ; ifndef USE_PUTCRT_SEG60
 
 
+%ifndef USE_PROGKEY_SEG60
 ; UBYTE FAR * ASMPASCAL nec98_programmable_key_table(unsigned index)
 		global	NEC98_PROGRAMMABLE_KEY_TABLE
 NEC98_PROGRAMMABLE_KEY_TABLE:
@@ -767,4 +845,7 @@ NEC98_SET_PROGRAMMABLE_KEY:
 		push	cs
 		push	ax
 		jmp	FAR_CON_TGROUP: NEC98_SET_PROGRAMMABLE_KEY_FAR
+
+%endif ; ifndef USE_PROGKEY_SEG60
+
 

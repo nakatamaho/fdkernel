@@ -170,6 +170,14 @@ _shiftfunc_char db  ' '                 ; 008ch 通常orシフトファンクシ
                 global _in_processing_stopkey
 _in_processing_stopkey  db  0           ; 00a4h semaphore for STOP key (in int6 handler)
 
+                resb    0107h - ($ - entry)
+                global  _ctrlp_flag
+_ctrlp_flag     db  0                   ; 0107h CTRL+P/N flag
+
+                resb    010ch - ($ - entry)
+                global  _ctrlfn_flag
+_ctrlfn_flag    db  11b                 ; 010Ch CTRL+Fn, CTRL+XFER/NFER flag
+
                 resb    0110h - ($ - entry)
                 global  _cursor_y
 _cursor_y       db  0                   ; 0110h カーソル位置Y
@@ -222,14 +230,6 @@ _disk_last_access_unit db 0             ; 0136h - last accessed disk unit number
 
 ;               resb    256 - ($ - entry)
 
-
-%if 1
-                resb    07ffh - ($ - entry)
-                global  _fd98_retract_hd_pending
-_fd98_retract_hd_pending db 0           ; a temporary solution: not compatible with MS-DOS
-
-%endif
-
 ; some codes and data in IO.SYS area
 ;--------
 %ifdef INCLUDE_CONKEY60
@@ -251,6 +251,11 @@ conseg60_end:
 %endif ; INCLUDE_CONSEG60
 ;--------
 
+%if 1
+                resb    17deh - ($ - entry)
+                global  _fd98_retract_hd_pending
+_fd98_retract_hd_pending db 0           ; a temporary solution: not compatible with MS-DOS
+%endif
 
 ; reserved area for RSDRV
 ;--------
@@ -268,7 +273,6 @@ _rsdrv_seg      dw  0                   ; 1802 segment of RSDRV.SYS
                 resb    1820h - ($ - entry)
 ;--------
 
-
 ; some codes and data in IO.SYS area
 ;--------
 %define INCLUDE_SUPSEG60
@@ -280,6 +284,15 @@ supseg60_begin:
 supseg60_end:
 ;--------
 
+
+%if 1
+		align	2
+                global _IosysDiskTransferBuffer
+                global _IosysDiskTransferBuffer_end
+_IosysDiskTransferBuffer    resb 2048   ; MAX_SEC_SIZE
+_IosysDiskTransferBuffer_end:
+%endif
+
 %ifdef DUMMY_CON_IN_IOSYS
 ; dummy con driver (workaround for some FEP driver(s) - yes, ATOK6 it is)
 ; On genuine (NEC's and EPSON's) MS-DOSes, CON device is placed at:
@@ -288,6 +301,8 @@ supseg60_end:
 
                 ; anywhere at seg 60h ... temporary here
                 resb    2400h - ($ - entry)
+                global _iosys_dummy_device_header
+_iosys_dummy_device_header:
 _dummy_con_dev  equ     $
                 dw      _dummy_prn_dev, seg _dummy_prn_dev
                 dw      8013h             ; chardev (stdin, stdout, int29h)
@@ -1352,6 +1367,34 @@ global %1udivsi3
 %endmacro
                 ULONG_HELPERS ___
 %endif
+
+		align 2
+%ifdef WATCOM
+global bios_peekw_watcall_
+%endif
+bios_peekw_watcall_:
+		push	bx
+		push	ds
+		xor	bx, bx
+		xchg	ax, bx
+		mov	ds, ax
+		mov	ax, [bx]
+		pop	ds
+		pop	bx
+		ret
+global BIOS_PEEKW_PASCAL
+BIOS_PEEKW_PASCAL:
+		push	bp
+		mov	bp, sp
+arg_f addr
+		mov	ax, [.addr]
+		call	bios_peekw_watcall_
+		pop	bp
+		ret	2
+
+global hma_text_in_kernel_asm
+hma_text_in_kernel_asm:
+
                  times 0xd0 - ($-begin_hma) db 0
                 ; reserve space for far jump to cp/m routine
                 times 5 db 0

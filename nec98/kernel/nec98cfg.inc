@@ -9,6 +9,7 @@
 %define USE_PRIVATE_INT29_STACK 1
 %define USE_PRIVATE_INTDC_STACK 1
 %define USE_PUTCRT_SEG60 1
+%define USE_PROGKEY_SEG60 1
 ;-------------------------------
 %ifdef IN_KERNEL_ASM
 	%define INCLUDE_CONSEG60 1

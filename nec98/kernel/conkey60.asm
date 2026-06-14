@@ -314,7 +314,7 @@ nec98_fetch_key_table:
 		mov	bx, [es: bx + _programmable_key]
 		ret
 
-nec98_programmable_key_table_ax_far:
+nec98_programmable_key_table_ax:
 		push	bx
 		push	cx
 		push	es
@@ -323,6 +323,10 @@ nec98_programmable_key_table_ax_far:
 		pop	es
 		pop	cx
 		pop	bx
+		ret
+
+nec98_programmable_key_table_ax_far:
+		call	nec98_programmable_key_table_ax
 		retf
 
 nec98_set_convkey_table_ax_sub:
@@ -390,29 +394,54 @@ nec98_set_convkey_table_ax_sub:
 		pop	ax
 		ret
 
-
 nec98_set_convkey_table_ax_far:
 		call	nec98_set_convkey_table_ax_sub
 		retf
 
+; UBYTE FAR * ASMCONPASCAL_FAR nec98_programmable_key_table_far(unsigned index)
+		global NEC98_PROGRAMMABLE_KEY_TABLE_FAR
+NEC98_PROGRAMMABLE_KEY_TABLE_FAR:
+		push	bp
+		mov	bp, sp
+arg_f index
+		mov	ax, [.index]
+		call	nec98_programmable_key_table_ax
+		pop	bp
+		retf	2
+
+; VOID ASMCONPASCAL_FAR nec98_set_cnvkey_table_far(UBYTE index)
+		global NEC98_SET_CNVKEY_TABLE_FAR
+NEC98_SET_CNVKEY_TABLE_FAR:
+		push	bp
+		mov	bp, sp
+arg_f index
+		mov	ax, [.index]
+		call	nec98_set_convkey_table_ax_sub
+		pop	bp
+		retf	2
+
+
 ; VOID ASMPASCAL far nec98_set_programmable_key_far(const void far *keydata, unsigned keyindex)
 		global NEC98_SET_PROGRAMMABLE_KEY_FAR
 NEC98_SET_PROGRAMMABLE_KEY_FAR:
-		mov	dl, 1
+		mov	al, 1
 		jmp	short NEC98_GETSET_PROGRAMMABLE_KEY_FAR
 
 ; VOID ASMPASCAL far nec98_get_programmable_key_far(void far *keydata, unsigned keyindex)
 		global NEC98_GET_PROGRAMMABLE_KEY_FAR
 NEC98_GET_PROGRAMMABLE_KEY_FAR:
-		mov	dl, 0
+		mov	al, 0
 NEC98_GETSET_PROGRAMMABLE_KEY_FAR:
 		push	bp
 		mov	bp, sp
 arg_f {keydata,4}, keyindex
 		cld
+		push	cx
+		push	dx
 		push	si
 		push	di
 		push	es
+		mov	dl, al
 		mov	ax, [.keyindex]
 		les	di, [.keydata]
 		cmp	al, 0ffh
@@ -425,6 +454,8 @@ arg_f {keydata,4}, keyindex
 		pop	es
 		pop	di
 		pop	si
+		pop	dx
+		pop	cx
 		pop	bp
 		retf	6
 .case_3a:
@@ -504,6 +535,57 @@ nec98_getset_progkey_range:
 		loop	.lp
 		pop	cx
 		ret
+
+
+; UWORD ASMCONPASCAL_FAR nec98_getset_ctrlfunc_far(UWORD r_ax)
+		global	NEC98_GETSET_CTRLFUNC_FAR
+NEC98_GETSET_CTRLFUNC_FAR:
+		push	bp
+		mov	bp, sp
+arg_f r_ax
+		mov	ax, 60h
+		mov	ds, ax
+		mov	ax, [.r_ax]
+		cmp	ax, 8000h
+		je	.get_f
+		cmp	ax, 8002h
+		je	.get_x
+		push	ax
+		test	ax, ax
+		jz	.set_f
+		cmp	ax, 1
+		je	.set_f
+		cmp	ax, 2
+		je	.set_x
+		cmp	ax, 3
+		jne	.exit_ax
+.set_x:
+		and	al, 1
+		shl	al, 1
+		xor	al, 2
+		mov	ah, 0fdh
+		jmp	short .set_xf
+.set_f:
+		xor	al, 1
+		mov	ah, 0feh
+.set_xf:
+		and	[_ctrlfn_flag], ah
+		or	[_ctrlfn_flag], al
+.exit_ax:
+		pop	ax
+.exit:
+		pop	bp
+		retf	2
+.get_f:
+		mov	al, [_ctrlfn_flag]
+.get_xf:
+		xor	al, 1
+		and	ax, 1
+		jmp	short .exit
+.get_x:
+		mov	al, [_ctrlfn_flag]
+		shr	al, 1
+		jmp	short .get_xf
 
 %endif	; INCLUDE_CONKEY60
 

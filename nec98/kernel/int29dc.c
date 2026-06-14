@@ -22,8 +22,13 @@
 
 #define CHR2(c1,c2)		((c1) | ((c2) << 8))
 
+#if 1
+#define CURSOR_X		get_crt_posx()
+#define CURSOR_Y		get_crt_posy()
+#else
 #define CURSOR_X		(*(UBYTE FAR *)MK_FP(0x0060, 0x011c))
 #define CURSOR_Y		(*(UBYTE FAR *)MK_FP(0x0060, 0x0110))
+#endif
 #define KANJI2_WAIT		(*(UBYTE FAR *)MK_FP(0x0060, 0x0115))
 #define KANJI1_CODE		(*(UBYTE FAR *)MK_FP(0x0060, 0x0116))
 #define PUT_ATTR		(*(UBYTE FAR *)MK_FP(0x0060, 0x011d))
@@ -50,26 +55,18 @@ extern UBYTE FAR ASM programmable_keys;
 extern struct progkey FAR ASM programmable_key[];
 
 
-#if 1
-  /* so effective in reducing size of code? (doubtful) */
-# define programmable_key_table  nec98_programmable_key_table
-#else
-STATIC UBYTE FAR *programmable_key_table(unsigned index)
-{
-  return MK_FP(FP_SEG(&(programmable_key[0])), (UWORD)(programmable_key[index].table));
-}
-#endif
-
 VOID ASMCFUNC int29_main(UBYTE c);
 
 #if 0
 #define iskanji(c)		(((c) >= 0x81 && (c) <= 0x9f) || ((c) >= 0xe0 && (c) <= 0xfc))
 #define iskanji2(c)		((c) >= 0x40 && (c) <= 0xfc && (c) != 0x7f)
 #else
+  #if !defined(USE_PUTCRT_SEG60)
 STATIC int iskanji(unsigned char c)
 {
   return (c>=0x81 && c<=0x9f) || (c>=0xe0 && c<=0xfc);
 }
+  #endif
 STATIC int iskanji2(unsigned char c)
 {
   return !((c>=0x07&&c<=0x0d) || c==0x1a || c==0x1b || c==0x1e);
@@ -108,86 +105,6 @@ STATIC UWORD sjis2jis(UWORD c)
 
   return ((UWORD)h << 8) | l;
 }
-
-STATIC VOID put_func_index(UBYTE x, UBYTE y, UWORD index)
-{
-  UBYTE cnt = 6;
-  UBYTE clear_char = CLEAR_CHAR;
-  UBYTE attr_r = CLEAR_ATTR ^ 4;  /* reverse */
-  CONST UBYTE FAR *p = programmable_key_table(index);
-
-  if(*p == 0xfe)
-  {
-    put_crt_wattr(x++, y, clear_char, attr_r);
-    p++;
-    cnt--;
-  }
-
-  while(cnt--)
-  {
-    UBYTE c = *p;
-
-    if(c)
-    {
-      if(iskanji(c) && cnt < 6 - 1 && iskanji2(*(p + 1)))
-      {
-        UWORD k;
-        p++;
-        k = sjis2jis(((UWORD)c << 8) | *p++) - 0x2000;
-        k = (k << 8) | (k >> 8);
-        put_crt_wattr(x++, y, k, attr_r);
-        put_crt_wattr(x++, y, k | 0x80, attr_r);
-      }
-      else
-      {
-        put_crt_wattr(x++, y, c, attr_r);
-        p++;
-      }
-    }
-    else
-      put_crt_wattr(x++, y, clear_char, attr_r);
-  }
-}
-
-STATIC VOID put_funcs(void)
-{
-  UBYTE i;
-  UBYTE x;
-  UBYTE y = get_crt_height();
-  UBYTE ofs = (FUNCTION_FLAG == 2) ? 10 : 0;
-
-  for(x = 0; x < 4; x++)
-    clear_crt(x, y);
-  put_crt_wattr(1, y, peekb(0x60, 0x8b), CLEAR_ATTR);
-  put_crt_wattr(2, y, peekb(0x60, 0x8c), CLEAR_ATTR);
-  for(i = 1; i <= 5; i++)
-  {
-    put_func_index(x, y, i + ofs);
-    x += 6;
-    clear_crt(x++, y);
-  }
-  for(; x < 4 + 6 * 5 + 4 + 4; x++)
-    clear_crt(x, y);
-  for(; i <= 10; i++)
-  {
-    put_func_index(x, y, i + ofs);
-    x += 6;
-    clear_crt(x++, y);
-  }
-  for(; x < 80; x++)
-    clear_crt(x, y);
-}
-
-STATIC VOID clear_funcs(void)
-{
-  UBYTE x;
-  UBYTE y = get_crt_height();
-  UBYTE width = get_crt_width();
-
-  for(x = 0; x < width; x++)
-    clear_crt(x, y);
-}
-
 #endif /* !defined(USE_PUTCRT_SEG60) */
 
 STATIC VOID show_function(void)
@@ -206,11 +123,15 @@ STATIC VOID show_function(void)
   }
 }
 
+#if 1
+#define redraw_function nec98_redraw_funcs_far
+#else
 STATIC VOID redraw_function(void)
 {
   if(FUNCTION_FLAG != 0)
     put_funcs();
 }
+#endif
 
 STATIC VOID hide_function(void)
 {
@@ -260,6 +181,7 @@ STATIC int atoi(UBYTE *p)
   return ret;
 }
 
+#if !defined(USE_PUTCRT_SEG60)
 STATIC VOID set_curpos_clipped(UBYTE x, UBYTE y, UBYTE offset)
 {
   UBYTE columns, rows;
@@ -272,111 +194,7 @@ STATIC VOID set_curpos_clipped(UBYTE x, UBYTE y, UBYTE offset)
   if (y >= rows) y = rows - 1;
   set_curpos(x, y);
 }
-
-STATIC VOID clear_screen_escj(UBYTE typ, UBYTE cpos_x, UBYTE cpos_y)
-{
-  UBYTE columns = get_crt_width();
-  UBYTE rows = get_crt_height();
-  UBYTE x, y;
-  switch(typ)
-  {
-    /* ESC[0J Clear screen from cursor position to the bottom right corner */
-    case 0:
-      for(x = cpos_x; x < columns; ++x)
-        clear_crt(x, cpos_y);
-      for(y = cpos_y + 1; y < rows; ++y)
-        for(x = 0; x < columns; ++x)
-          clear_crt(x, y);
-      break;
-    
-    /* ESC[1J Clear screen from upper left corner to cursor position */
-    case 1:
-      for(y = 0; y < cpos_y; ++y)
-        for(x = 0; x < columns; ++x)
-          clear_crt(x, y);
-      for(x = 0; x <= cpos_x; ++x)
-        clear_crt(x, cpos_y);
-      break;
-    
-    /* ESC[2J Clear the screen, and move cursor to the HOME position */ 
-    case 2:
-      clear_crt_all();
-      set_curpos(0, 0);
-      break;
-    
-    default:
-      return;
-  }
-  redraw_function();
-}
-
-STATIC VOID erase_line_esck(UBYTE typ, UBYTE cpos_x, UBYTE cpos_y)
-{
-  UBYTE columns = get_crt_width();
-  UBYTE x;
-  
-  if (cpos_y >= get_crt_height()) return;
-  switch(typ)
-  {
-    /* ESC[0K erase line from the cursor position to the end-of-line */
-    case 0:
-      for(x = cpos_x; x < columns; ++x)
-        clear_crt(x, cpos_y);
-      break;
-    
-    /* ESC[1K erase line from the beginng-of-line to the cursor position */
-    case 1:
-      for(x = 0; x <= cpos_x; ++x)
-        clear_crt(x, cpos_y);
-      break;
-    
-    /* ESC[2K clear the line where the cursor is placed */
-    case 2:
-      for(x = 0; x < columns; ++x)
-        clear_crt(x, cpos_y);
-      break;
-  }
-}
-
-STATIC VOID move_cursor_up(UBYTE count)
-{
-  UBYTE y = CURSOR_Y;
-
-  if (count == 0) count = 1;
-  y = (y > count) ? (y - count) : 0;
-  set_curpos(CURSOR_X, y);
-}
-
-STATIC VOID move_cursor_down(UBYTE count)
-{
-  UWORD rows = (UWORD)(UBYTE)(get_crt_height());
-  UWORD y = (UWORD)(UBYTE)(CURSOR_Y);
-
-  if (count == 0) count = 1;
-  y += count;
-  if (y >= rows) y = rows - 1;
-  set_curpos(CURSOR_X, (UBYTE)y);
-}
-
-STATIC VOID move_cursor_left(UBYTE count)
-{
-  UBYTE x = CURSOR_X;
-
-  if (count == 0) count = 1;
-  x = (x > count) ? (x - count) : 0;
-  set_curpos(x, CURSOR_Y);
-}
-
-STATIC VOID move_cursor_right(UBYTE count)
-{
-  UWORD columns = (UWORD)(UBYTE)(get_crt_width());
-  UWORD x = (UWORD)(UBYTE)(CURSOR_X);
-
-  if (count == 0) count = 1;
-  x += count;
-  if (x >= columns) x = columns - 1;
-  set_curpos((UBYTE)x, CURSOR_Y);
-}
+#endif /* !defined(USE_PUTCRT_SEG60) */
 
 STATIC VOID roll_screen_up(VOID) /* move cursor down or scroll up (EscD) */
 {
@@ -407,22 +225,9 @@ STATIC VOID roll_screen_down(VOID) /* move cursor up or scroll down (EscM) */
   }
 }
 
-STATIC VOID set_crt_lines(UBYTE is_25line)
-{
-  UBYTE new_rows = is_25line ? 24 : 19;
-  
-  set_curpos(0, 0);
-  crt_set_mode(is_25line ? 0 : 1);
-  *(UBYTE FAR *)MK_FP(0x60, 0x113) = !!is_25line;
-  SCROLL_BOTTOM = new_rows;
-  clear_crt_all();
-  if (FUNCTION_FLAG) {
-    SCROLL_BOTTOM = --new_rows;
-    redraw_function();
-  }
-  update_cursor_view();
-}
-
+#if 1
+#define set_graph_state nec98_crt_set_graph_far
+#else
 STATIC VOID set_graph_state(UBYTE mode_number)
 {
   if (mode_number == 0) {
@@ -434,6 +239,7 @@ STATIC VOID set_graph_state(UBYTE mode_number)
     redraw_function();
   }
 }
+#endif
 
 STATIC VOID parse_esc(UBYTE c)
 {
@@ -510,47 +316,20 @@ STATIC VOID parse_esc(UBYTE c)
       case '*':
         if(int29_esc_cnt == 1)  /* ESC* 画面消去&カーソルをホームへ */
         {
-          clear_screen_escj(2, 0, 0);
+          nec98_crt_escjk_far('J', '2'); /* ESC[2J */
         }
         break;
-
-#if 0
-      case ')':
-        if(int29_esc_cnt == 2)
-        {
-          switch(int29_esc_buf[1])
-          {
-            case '0':  /* ESC)0 漢字モード設定 */
-              break;
-            case '3':  /* ESC)3 グラフモード設定 */
-              break;
-          }
-        }
-        break;
-#endif
 
       case '[':
         switch(c)
         {
-#if 1
-          case 's':
-            if(int29_esc_cnt == 2)
-            {
-              SAVE_CURSOR_Y = CURSOR_Y;
-              SAVE_CURSOR_X = CURSOR_X;
-              SAVE_PUT_ATTR = PUT_ATTR;
-            }
-            break;
+          case 's': /* fallthrough */
           case 'u':
             if(int29_esc_cnt == 2)
             {
-              CURSOR_Y = SAVE_CURSOR_Y;
-              CURSOR_X = SAVE_CURSOR_X;
-              PUT_ATTR = SAVE_PUT_ATTR;
-              set_curpos(CURSOR_X, CURSOR_Y);
+              nec98_crt_escsu_far(c);
             }
             break;
-#endif
 
           case 'h':
             if(int29_esc_cnt == 4)
@@ -561,7 +340,11 @@ STATIC VOID parse_esc(UBYTE c)
                   hide_function();
                   break;
                 case CHR2('>', '3'):  /* ESC[>3h 20行モード設定 */
+#if 1
+                  nec98_crt_setmodenh_far(c);
+#else
                   set_crt_lines(FALSE);
+#endif
                   break;
                 case CHR2('>', '5'):  /* ESC[>5h カーソル非表示 */
                   CURSOR_VIEW = 0;
@@ -582,7 +365,11 @@ STATIC VOID parse_esc(UBYTE c)
                   show_function();
                   break;
                 case CHR2('>', '3'):  /* ESC[>3l 25行モード設定 */
+#if 1
+                  nec98_crt_setmodenh_far(c);
+#else
                   set_crt_lines(TRUE);
+#endif
                   break;
                 case CHR2('>', '5'):  /* ESC[>5l カーソル表示 */
                   CURSOR_VIEW = 1;
@@ -597,14 +384,10 @@ STATIC VOID parse_esc(UBYTE c)
           case 'm':
             if(int29_esc_cnt >= 2)  /* ESC[<ps>;...;<ps>m 表示属性<ps>設定 */
             {
-              CONST STATIC UBYTE palgbr[8] = { 0x00, 0x40, 0x20, 0x60, 0x80, 0xc0, 0xa0, 0xe0 }; /* ESC[17m..23m */
-              CONST STATIC UBYTE palbgr[8] = { 0x00, 0x40, 0x80, 0xc0, 0x20, 0x60, 0xa0, 0xe0 }; /* ESC[30m..37m */
-              UBYTE clr_attr = CLEAR_ATTR;
-              UBYTE new_attr = clr_attr & 0xf0;
+              UBYTE new_attr = nec98_crt_ansi2attr_far(0, 0);
               UBYTE *arg;
               UBYTE *next_arg;
 
-              if ((new_attr & 0x10) == 0) new_attr |= 1;
               int29_esc_buf[int29_esc_cnt - 1] = '\0';
 #if defined(__WATCOMC__) && (__WATCOMC__ < 1300)   /* to avoid compiler's bug(?) */
               if(int29_esc_cnt < sizeof(int29_esc_buf) - 1)
@@ -616,60 +399,19 @@ STATIC VOID parse_esc(UBYTE c)
 
                 next_arg = parse_esc_arg(arg);
                 attr = atoi(arg);
-                if(attr < 0)
+                if(attr == -1)
                   break;
-                if(attr >= 0 && attr <= 16)
-                {
-                  switch(attr)
-                  {
-                    case 1:  /* ハイライト (Bold) */
-                      new_attr |= 0xe0;
-                      break;
-                    case 2:  /* バーティカルライン */
-                      new_attr |= 0x10;
-                      break;
-                    case 4:  /* アンダーライン */
-                      new_attr |= 0x08;
-                      break;
-                    case 5:  /* ブリンク */
-                      new_attr |= 0x02;
-                      break;
-                    case 7:  /* リバース */
-                      new_attr |= 0x04;
-                      break;
-                    case 8:  /* シークレット */
-                    case 16:
-                      new_attr &= 0xfe;
-                      break;
-                    default:
-                      new_attr = clr_attr;
-                      break;
-                  }
-                }
-                else if(attr >= 17 && attr <= 23)
-                {
-                  new_attr = (new_attr & 0x1f) | palgbr[attr & 7];
-                }
-                else if(attr >= 30 && attr <= 37)
-                {
-                  new_attr = (new_attr & 0x1f) | palbgr[attr - 30];
-                }
-                else if(attr >= 40 && attr <= 47)
-                {
-                  new_attr = (new_attr & 0x1f) | palbgr[attr - 40] | 4;
-                }
-                else
-                {
-                  /* fallback */
-                  new_attr = clr_attr;
-                }
+                new_attr = nec98_crt_ansi2attr_far(attr, new_attr);
               }
               PUT_ATTR = new_attr;
             }
             break;
 
-          case 'A':
-            if(int29_esc_cnt >= 2)  /* ESC[<pn>A カーソル上<pn>移動 */
+          case 'A': /* ESC[<num>A move cursor up */
+          case 'B': /* ESC[<num>B move cursor down */
+          case 'C': /* ESC[<num>C move cursor right */
+          case 'D': /* ESC[<num>D move cursor left */
+            if(int29_esc_cnt >= 2)
             {
               int pn = 1;
 
@@ -680,100 +422,9 @@ STATIC VOID parse_esc(UBYTE c)
                 if(pn == 0)
                   pn = 1;
               }
-              if(pn > 0)
+              if (pn != -1)
               {
-                UBYTE y = CURSOR_Y;
-                if(y > 0)
-                {
-                  if(y > pn)
-                    y -= pn;
-                  else
-                    y = 0;
-                  set_curpos(CURSOR_X, y);
-                }
-              }
-            }
-            break;
-
-          case 'B':
-            if(int29_esc_cnt >= 2)  /* ESC[<pn>B カーソル下<pn>移動 */
-            {
-              int pn = 1;
-
-              if(int29_esc_cnt >= 3)
-              {
-                int29_esc_buf[int29_esc_cnt - 1] = '\0';
-                pn = atoi(&int29_esc_buf[1]);
-                if(pn == 0)
-                  pn = 1;
-              }
-              if(pn > 0)
-              {
-                UBYTE y		= CURSOR_Y;
-                UBYTE max_y	= get_crt_height() - 1;
-                if(y < max_y)
-                {
-                  if(max_y - y > pn)
-                    y += pn;
-                  else
-                    y = max_y;
-                  set_curpos(CURSOR_X, y);
-                }
-              }
-            }
-            break;
-
-          case 'C':
-            if(int29_esc_cnt >= 2)  /* ESC[<pn>C カーソル右<pn>移動 */
-            {
-              int pn = 1;
-
-              if(int29_esc_cnt >= 3)
-              {
-                int29_esc_buf[int29_esc_cnt - 1] = '\0';
-                pn = atoi(&int29_esc_buf[1]);
-                if(pn == 0)
-                  pn = 1;
-              }
-              if(pn > 0)
-              {
-                UBYTE x		= CURSOR_X;
-                UBYTE max_x	= get_crt_width() - 1;
-                if(x < max_x)
-                {
-                  if(max_x - x > pn)
-                    x += pn;
-                  else
-                    x = max_x;
-                  set_curpos(x, CURSOR_Y);
-                }
-              }
-            }
-            break;
-
-          case 'D':
-            if(int29_esc_cnt >= 2)  /* ESC[<pn>D カーソル左<pn>移動 */
-            {
-              int pn = 1;
-
-              if(int29_esc_cnt >= 3)
-              {
-                int29_esc_buf[int29_esc_cnt - 1] = '\0';
-                pn = atoi(&int29_esc_buf[1]);
-                if(pn == 0)
-                  pn = 1;
-              }
-              if(pn > 0)
-              {
-                UBYTE x = CURSOR_X;
-                if(x > 0)
-                {
-                  if(x > pn)
-                    x -= pn;
-                  else
-                    x = 0;
-                  set_curpos(x, CURSOR_Y);
-                }
+                nec98_move_curpos_rel_far(c - 'A', (UWORD)pn);
               }
             }
             break;
@@ -803,6 +454,7 @@ STATIC VOID parse_esc(UBYTE c)
             break;
 
           case 'J':
+          case 'K':
             if(int29_esc_cnt == 2)
             {
               int29_esc_buf[1] = '0';
@@ -810,11 +462,9 @@ STATIC VOID parse_esc(UBYTE c)
             }
             if(int29_esc_cnt == 3)
             {
-              clear_screen_escj(int29_esc_buf[1] - '0', CURSOR_X, CURSOR_Y);
+              nec98_crt_escjk_far(c, int29_esc_buf[1]);
             }
-            break;
 
-#if 1
           case 'n':
             if(int29_esc_cnt == 3)
             {
@@ -825,28 +475,14 @@ STATIC VOID parse_esc(UBYTE c)
                   break;
               }
             }
-# if 0
             else if(int29_esc_cnt == 4)
             {
               switch(*(UWORD *)&int29_esc_buf[1])
               {
                 case CHR2('>', '3'):  /* ESC[>3n 31lines mode (Hi-res) */
+                  nec98_crt_setmodenh_far(c);
                   break;
               }
-            }
-# endif
-            break;
-#endif
-
-          case 'K':
-            if(int29_esc_cnt == 2)
-            {
-              int29_esc_buf[1] = '0';
-              int29_esc_cnt = 3;
-            }
-            if(int29_esc_cnt == 3)
-            {
-              erase_line_esck(int29_esc_buf[1] - '0', CURSOR_X, CURSOR_Y);
             }
             break;
 
@@ -901,6 +537,9 @@ STATIC VOID parse_esc(UBYTE c)
 
 VOID ASMCFUNC int29_main(UBYTE c)
 {
+#ifdef USE_PUTCRT_SEG60
+  UWORD cc;
+#endif
   UBYTE width;
   UBYTE height;
   BYTE x;
@@ -909,14 +548,24 @@ VOID ASMCFUNC int29_main(UBYTE c)
   width = get_crt_width();
   height = get_crt_height();
 
+#ifdef USE_PUTCRT_SEG60
+  cc = nec98_crt_get_kanji1_far();
+  if (cc != 0 && iskanji2(c))
+  {
+    UWORD k;
+    int is_half;
+
+    cc |= c;
+#else
   if(KANJI2_WAIT && iskanji2(c))
   {
     UWORD k, cc;
     int is_half;
 
+    cc = ((UWORD)KANJI1_CODE << 8) | c;
+#endif
     x = CURSOR_X;
     y = CURSOR_Y;
-    cc = ((UWORD)KANJI1_CODE << 8) | c;
     k = sjis2jis(cc) - 0x2000;
     is_half = (cc >= 0x8500 && cc <= 0x869e) || c == 0x1f; /* for compatiblity with NEC MS-DOS' standard console */
     k = (k << 8) | (k >> 8);
@@ -961,8 +610,12 @@ VOID ASMCFUNC int29_main(UBYTE c)
     }
 
     set_curpos(x, y);
+#ifdef USE_PUTCRT_SEG60
+    nec98_crt_set_kanji1_far(0);
+#else
     KANJI2_WAIT = 0;
     KANJI1_CODE = 0;
+#endif
     return;
   }
 
@@ -1067,7 +720,7 @@ VOID ASMCFUNC int29_main(UBYTE c)
 
     case 0x1a:  /* Clear Screen */
       int29_esc = FALSE;
-      clear_screen_escj(2, 0, 0);
+      nec98_crt_escjk_far('J', '2'); /* ESC[2J */
       break;
     
     case 0x1e:  /* HOME */
@@ -1082,12 +735,19 @@ VOID ASMCFUNC int29_main(UBYTE c)
         break;
       }
 
+#ifdef USE_PUTCRT_SEG60
+      if (nec98_crt_set_kanji1_far(c))
+      {
+        break;
+      }
+#else
       if(peekb(0x60, 0x8a) && iskanji(c))
       {
         KANJI1_CODE = c;
         KANJI2_WAIT = 1;
         break;
       }
+#endif
 
       x = CURSOR_X;
       y = CURSOR_Y;
@@ -1236,6 +896,9 @@ VOID ASMCFUNC intdc_main(iregs FAR *r)
       break;
 
     case 0x0f:
+#if 1
+      r->AX = nec98_getset_ctrlfunc_far(r->AX);
+#else
       switch(r->AX & 0xfff0)
       {
         case 0x0000:  /* CTL+FUNCのソフトキー化／解除 */
@@ -1252,6 +915,7 @@ VOID ASMCFUNC intdc_main(iregs FAR *r)
           }
           break;
       }
+#endif
       break;
 
     case 0x10:
@@ -1282,23 +946,15 @@ VOID ASMCFUNC intdc_main(iregs FAR *r)
         case 0x05:  /* move cursor up or scroll down (EscM) */
           roll_screen_down();
           return;
-        case 0x06:  /* move cursor up (Esc[nA) */
-          move_cursor_up(r->DL);
+        case 0x06:  /* move cursor up (Esc[<num>A) */
+        case 0x07:  /* move cursor down (Esc[<num>B) */
+        case 0x08:  /* move cursor right (Esc[<num>C) */
+        case 0x09:  /* move cursor left (Esc[<num>D) */
+          nec98_move_curpos_rel_far(r->AH - 0x06, r->DL);
           return;
-        case 0x07:  /* move cursor down (Esc[nB) */
-          move_cursor_down(r->DL);
-          return;
-        case 0x08:  /* move cursor right (Esc[nC) */
-          move_cursor_right(r->DL);
-          return;
-        case 0x09:  /* move cursor left (Esc[nD) */
-          move_cursor_left(r->DL);
-          return;
-        case 0x0a:  /* clear screen */
-          clear_screen_escj(r->DL, CURSOR_X, CURSOR_Y);
-          return;
-        case 0x0b:  /* clear line (Esc[nK) */
-          erase_line_esck(r->DL, CURSOR_X, CURSOR_Y);
+        case 0x0a:
+        case 0x0b:
+          nec98_crt_escjk_far(r->AH, r->DL);
           return;
         case 0x0c:  /* scroll down text area */
           crt_rolldown(r->DL);
