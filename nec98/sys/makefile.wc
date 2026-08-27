@@ -6,9 +6,9 @@
 
 !include "../mkfiles/generic.mak"
 
-ifdef XUPX
+!ifdef XUPX
 XUPXSYS=$(XUPX) $@
-endif
+!endif
 
 BASEDIR=..$(DIRSEP)..$(DIRSEP)
 HDRD=$(BASEDIR)hdr$(DIRSEP)
@@ -72,4 +72,3 @@ clean:
 #		*Individual File Dependencies*
 sys.obj: .$(DIRSEP)sys.c $(HDRD)portab.h $(HDRD)device.h b_fat12.h b_fat12f.h b_fat16.h b_fat32.h
 		$(CC) $(CFLAGS) $[@
-
