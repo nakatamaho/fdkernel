@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Deterministic Open Watcom 1.9 build for the M06 PC-88VA kernel scaffold.
+
+CC=wcc
+NASM=nasm
+LIBRARIAN=wlib
+LINKER=wlink
+PYTHON=python3
+
+CFLAGS=-zq -0 -ms -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DJAPAN -DDBCS
+NASMFLAGS=-f obj -DPC88VA -DJAPAN -DDBCS
+
+all: bin/KERNEL.SYS bin/KVA8616.SYS build/KVA8616.map
+
+build/startup.obj: kernel/startup.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o build/startup.obj kernel/startup.asm
+
+build/stubs.obj: kernel/stubs.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=build/stubs.obj kernel/stubs.c
+
+build/platform.lib: build/stubs.obj
+	-rm -f build/platform.lib
+	$(PYTHON) -c "import os; epoch=int(os.environ['SOURCE_DATE_EPOCH']); os.utime('build/stubs.obj',(epoch,epoch))"
+	$(LIBRARIAN) -q build/platform.lib +build/stubs.obj
+
+build/KVA8616.exe: build/startup.obj build/platform.lib config/link.rsp
+	$(LINKER) @config/link.rsp
+
+bin/KERNEL.SYS: build/KVA8616.exe
+	-mkdir -p bin
+	cp build/KVA8616.exe bin/KERNEL.SYS
+
+bin/KVA8616.SYS: build/KVA8616.exe
+	-mkdir -p bin
+	cp build/KVA8616.exe bin/KVA8616.SYS
+
+build/KVA8616.map: build/KVA8616.exe
+
+clean: .SYMBOLIC
+	-rm -rf build bin

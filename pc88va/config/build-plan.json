@@ -1,0 +1,26 @@
+{
+  "artifact_role": "pc88va-compile-only-kernel-scaffold",
+  "objects": [
+    {
+      "classification": "pc88va-owned",
+      "object": "pc88va/build/startup.obj",
+      "reason": "Defines the MZ entry and local fatal-stop path without firmware or hardware access.",
+      "source": "pc88va/kernel/startup.asm",
+      "stub_removal_milestone": null
+    },
+    {
+      "classification": "temporary-fail-closed-stub",
+      "object": "pc88va/build/stubs.obj",
+      "reason": "Defines unresolved PC-88VA platform services with explicit failure returns.",
+      "source": "pc88va/kernel/stubs.c",
+      "stub_removal_milestone": "M17"
+    }
+  ],
+  "output": "pc88va/bin/KERNEL.SYS",
+  "schema_version": 1,
+  "target_macros": [
+    "DBCS",
+    "JAPAN",
+    "PC88VA"
+  ]
+}
