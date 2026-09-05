@@ -16,6 +16,7 @@ bits 16
 segment _TEXT class=CODE public use16
 
 extern pc88va_platform_probe_
+extern pc88va_console_diagnostic_
 global ..start
 global _pc88va_compile_only_entry
 global _pc88va_compile_only_fatal_stop
@@ -25,6 +26,7 @@ _pc88va_compile_only_entry:
         cli
         cld
         call pc88va_platform_probe_
+        call pc88va_console_diagnostic_
 
 _pc88va_compile_only_fatal_stop:
         cli

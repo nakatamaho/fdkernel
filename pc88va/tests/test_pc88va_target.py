@@ -45,12 +45,12 @@ class TargetTests(unittest.TestCase):
         ledger = json.loads((TARGET / "config/stubs.json").read_text(encoding="utf-8"))
         source = (TARGET / "kernel/stubs.c").read_text(encoding="utf-8")
         self.assertEqual(ledger["failure_return"], -1)
-        self.assertEqual(len(ledger["interfaces"]), 8)
+        self.assertEqual(len(ledger["interfaces"]), 7)
         for item in ledger["interfaces"]:
             self.assertRegex(item["removal_milestone"], r"^M(?:0[789]|1[0-7])$")
             self.assertIn(item["name"], source)
             self.assertIn(item["marker"], source)
-        self.assertEqual(source.count("return PC88VA_UNAVAILABLE;"), 8)
+        self.assertEqual(source.count("return PC88VA_UNAVAILABLE;"), 7)
 
     def test_only_m08_stubs_replaced_by_shared_cores(self) -> None:
         source = (TARGET / "kernel/stubs.c").read_text(encoding="utf-8")

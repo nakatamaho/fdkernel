@@ -24,12 +24,16 @@ build/loader_services.obj: kernel/loader_services.asm boot/loader_abi.inc boot/d
 	-mkdir -p build bin
 	$(NASM) $(NASMFLAGS) -Iboot/ -o build/loader_services.obj kernel/loader_services.asm
 
+build/console.obj: kernel/console.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o build/console.obj kernel/console.asm
+
 build/platform.lib: build/stubs.obj
 	-rm -f build/platform.lib
 	$(PYTHON) -c "import os; epoch=int(os.environ['SOURCE_DATE_EPOCH']); os.utime('build/stubs.obj',(epoch,epoch))"
 	$(LIBRARIAN) -q build/platform.lib +build/stubs.obj
 
-build/KVA8616.exe: build/startup.obj build/loader_services.obj build/platform.lib config/link.rsp
+build/KVA8616.exe: build/startup.obj build/loader_services.obj build/console.obj build/platform.lib config/link.rsp
 	$(LINKER) @config/link.rsp
 
 bin/KERNEL.SYS: build/KVA8616.exe

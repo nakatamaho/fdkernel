@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-name: PC-88VA target and ROM-free loader QA
+name: PC-88VA target and ROM-free loader and console QA
 
 on:
   push:
     branches:
       - necpc88va
       - topic/m08-pc88va-disk-loader-handoff
+      - topic/m09-pc88va-early-console-output
     paths:
       - "pc88va/**"
       - ".github/workflows/pc88va-compile.yml"
@@ -30,7 +31,7 @@ jobs:
           python3 -m pip install --only-binary=:all: --require-hashes \
             --target "$RUNNER_TEMP/m08-qa" -r pc88va/tests/m08-requirements.txt
 
-      - name: Validate target structure and execute shared loader cores
+      - name: Validate target structure and execute loader and console cores
         run: |
           export PYTHONPATH="$RUNNER_TEMP/m08-qa"
           git diff --check

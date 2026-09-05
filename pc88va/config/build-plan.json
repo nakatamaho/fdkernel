@@ -1,10 +1,10 @@
 {
-  "artifact_role": "pc88va-kernel-entry-carrier-with-parameterized-loader-services",
+  "artifact_role": "pc88va-kernel-entry-carrier-with-loader-and-early-console",
   "objects": [
     {
       "classification": "pc88va-owned",
       "object": "pc88va/build/startup.obj",
-      "reason": "Defines the MZ entry and local fatal-stop path without firmware or hardware access.",
+      "reason": "Defines the unchanged MZ entry boundary, calls the early-console diagnostic and retains the local fatal-stop path.",
       "source": "pc88va/kernel/startup.asm",
       "stub_removal_milestone": null
     },
@@ -20,6 +20,13 @@
       "object": "pc88va/build/loader_services.obj",
       "reason": "Uses the same parameterized disk and zero-relocation MZ handoff cores as the loader; no private firmware values are embedded.",
       "source": "pc88va/kernel/loader_services.asm",
+      "stub_removal_milestone": null
+    },
+    {
+      "classification": "pc88va-owned",
+      "object": "pc88va/build/console.obj",
+      "reason": "Adapts printable ASCII and CR/LF to the independently public PC-88VA Text BIOS service.",
+      "source": "pc88va/kernel/console.asm",
       "stub_removal_milestone": null
     },
     {
