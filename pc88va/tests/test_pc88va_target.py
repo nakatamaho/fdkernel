@@ -10,8 +10,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-TARGET = ROOT / "pc88va"
+TARGET = Path(__file__).resolve().parents[1]
 
 
 class TargetTests(unittest.TestCase):
@@ -22,7 +21,7 @@ class TargetTests(unittest.TestCase):
         self.assertNotIn("-DIBMPC", makefile)
 
     def test_machine_selectors_are_mutually_exclusive(self) -> None:
-        for relative in ("kernel/startup.asm", "kernel/stubs.c"):
+        for relative in ("kernel/startup.asm", "kernel/stubs.c", "boot/disk_read.inc", "boot/mz_validate.inc"):
             text = (TARGET / relative).read_text(encoding="utf-8")
             self.assertIn("NEC98", text)
             self.assertIn("IBMPC", text)
@@ -31,6 +30,7 @@ class TargetTests(unittest.TestCase):
     def test_link_inputs_are_explicit_and_not_nec98(self) -> None:
         lines = (TARGET / "config/link.rsp").read_text(encoding="ascii").splitlines()
         self.assertEqual(lines.count("file build/startup.obj"), 1)
+        self.assertEqual(lines.count("file build/loader_services.obj"), 1)
         self.assertEqual(lines.count("library build/platform.lib"), 1)
         self.assertFalse(any("nec98" in line.lower() or "ibmpc" in line.lower() for line in lines))
 
@@ -45,12 +45,22 @@ class TargetTests(unittest.TestCase):
         ledger = json.loads((TARGET / "config/stubs.json").read_text(encoding="utf-8"))
         source = (TARGET / "kernel/stubs.c").read_text(encoding="utf-8")
         self.assertEqual(ledger["failure_return"], -1)
-        self.assertEqual(len(ledger["interfaces"]), 10)
+        self.assertEqual(len(ledger["interfaces"]), 8)
         for item in ledger["interfaces"]:
             self.assertRegex(item["removal_milestone"], r"^M(?:0[789]|1[0-7])$")
             self.assertIn(item["name"], source)
             self.assertIn(item["marker"], source)
-        self.assertGreaterEqual(source.count("return PC88VA_UNAVAILABLE;"), 10)
+        self.assertEqual(source.count("return PC88VA_UNAVAILABLE;"), 8)
+
+    def test_only_m08_stubs_replaced_by_shared_cores(self) -> None:
+        source = (TARGET / "kernel/stubs.c").read_text(encoding="utf-8")
+        services = (TARGET / "kernel/loader_services.asm").read_text(encoding="utf-8")
+        for name in ("pc88va_disk_read", "pc88va_loader_handoff"):
+            self.assertNotIn(name, source)
+            self.assertIn("global " + name + "_", services)
+            self.assertIn("call " + name + "_core", services)
+        self.assertIn('%include "disk_read.inc"', services)
+        self.assertIn('%include "loader_handoff.inc"', services)
 
     def test_stubs_have_no_hardware_access(self) -> None:
         text = (TARGET / "kernel/stubs.c").read_text(encoding="utf-8").lower()

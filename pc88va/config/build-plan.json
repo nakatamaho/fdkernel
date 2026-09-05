@@ -1,11 +1,25 @@
 {
-  "artifact_role": "pc88va-compile-only-kernel-scaffold",
+  "artifact_role": "pc88va-kernel-entry-carrier-with-parameterized-loader-services",
   "objects": [
     {
       "classification": "pc88va-owned",
       "object": "pc88va/build/startup.obj",
       "reason": "Defines the MZ entry and local fatal-stop path without firmware or hardware access.",
       "source": "pc88va/kernel/startup.asm",
+      "stub_removal_milestone": null
+    },
+    {
+      "classification": "pc88va-owned",
+      "includes": [
+        "pc88va/boot/disk_read.inc",
+        "pc88va/boot/loader_abi.inc",
+        "pc88va/boot/loader_handoff.inc",
+        "pc88va/boot/mz_transform.inc",
+        "pc88va/boot/mz_validate.inc"
+      ],
+      "object": "pc88va/build/loader_services.obj",
+      "reason": "Uses the same parameterized disk and zero-relocation MZ handoff cores as the loader; no private firmware values are embedded.",
+      "source": "pc88va/kernel/loader_services.asm",
       "stub_removal_milestone": null
     },
     {

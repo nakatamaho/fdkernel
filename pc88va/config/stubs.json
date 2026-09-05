@@ -9,13 +9,6 @@
       "service": "earliest machine initialization"
     },
     {
-      "abi": "near C call; caller-owned request pointer; signed 16-bit status return",
-      "marker": "M06STUB:DISK_READ:M08",
-      "name": "pc88va_disk_read",
-      "removal_milestone": "M08",
-      "service": "firmware or loader disk input"
-    },
-    {
       "abi": "near C call; unsigned character argument; signed 16-bit status return",
       "marker": "M06STUB:CONSOLE_OUTPUT:M09",
       "name": "pc88va_console_putc",
@@ -56,13 +49,6 @@
       "name": "pc88va_fatal_stop_request",
       "removal_milestone": "M10",
       "service": "reboot, termination, and fatal stop"
-    },
-    {
-      "abi": "near C call; caller-owned loader record pointer; signed 16-bit status return",
-      "marker": "M06STUB:LOADER_HANDOFF:M08",
-      "name": "pc88va_loader_handoff",
-      "removal_milestone": "M08",
-      "service": "system transfer and loader interaction"
     },
     {
       "abi": "near C call; caller-owned NLS request pointer; signed 16-bit status return",

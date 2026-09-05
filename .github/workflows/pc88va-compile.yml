@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-name: PC-88VA compile target structure
+name: PC-88VA target and ROM-free loader QA
 
 on:
   push:
     branches:
       - necpc88va
+      - topic/m08-pc88va-disk-loader-handoff
     paths:
       - "pc88va/**"
       - ".github/workflows/pc88va-compile.yml"
@@ -20,8 +21,18 @@ jobs:
       - name: Check out fdkernel
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Validate independent compile target structure
+      # This assembler is a ROM-free QA adapter, not the accepted guest-build
+      # toolchain. The parent gate separately uses the locked M01 container.
+      - name: Install ROM-free execution QA dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends nasm
+          python3 -m pip install --only-binary=:all: --require-hashes \
+            --target "$RUNNER_TEMP/m08-qa" -r pc88va/tests/m08-requirements.txt
+
+      - name: Validate target structure and execute shared loader cores
+        run: |
+          export PYTHONPATH="$RUNNER_TEMP/m08-qa"
           git diff --check
           PYTHONPYCACHEPREFIX="$RUNNER_TEMP/pc88va-pycache" python3 -m compileall -q pc88va/tools pc88va/tests
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s pc88va/tests -p 'test_*.py'

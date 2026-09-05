@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Collect deterministic M06 PC-88VA compile and kernel-interface evidence."""
+"""Collect deterministic PC-88VA carrier and parameterized loader evidence."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ TOOLS = ("wcc", "wmake", "wlink", "wlib", "nasm")
 EXPECTED_MACROS = ["DBCS", "JAPAN", "PC88VA"]
 COMMANDS = [
     "nasm -f obj -DPC88VA -DJAPAN -DDBCS -o build/startup.obj kernel/startup.asm",
+    "nasm -f obj -DPC88VA -DJAPAN -DDBCS -Iboot/ -o build/loader_services.obj kernel/loader_services.asm",
     "wcc -zq -0 -ms -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DJAPAN -DDBCS -fo=build/stubs.obj kernel/stubs.c",
     "python3 -c import-os-set-build/stubs.obj-mtime-from-SOURCE_DATE_EPOCH",
     "wlib -q build/platform.lib +build/stubs.obj",
@@ -132,6 +133,8 @@ def parse_link_map(path: Path) -> dict[str, object]:
         "_pc88va_compile_only_entry",
         "_pc88va_compile_only_fatal_stop",
         "pc88va_platform_probe_",
+        "pc88va_disk_read_",
+        "pc88va_loader_handoff_",
     }
     names = {item["name"] for item in symbols}
     missing = sorted(required - names)
@@ -169,6 +172,8 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         path = repo_root / item["object"]
         record = dict(item)
         record.update(identity(path))
+        record["source_inputs"] = [identity(repo_root / source, source)
+                                   for source in [item["source"], *item.get("includes", [])]]
         objects.append(record)
 
     artifact = target / "bin/KERNEL.SYS"
@@ -182,6 +187,14 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
     for marker in markers:
         if binary.count(marker.encode("ascii")) != 1:
             raise EvidenceError(f"stub marker multiplicity is not one: {marker}")
+    service_markers = ["M08SERVICE:DISK_READ:PARAMETERIZED",
+                       "M08SERVICE:LOADER_HANDOFF:ZERO_RELOCATION_MZ"]
+    for marker in service_markers:
+        if binary.count(marker.encode("ascii")) != 1:
+            raise EvidenceError("M08 service marker multiplicity is not one")
+    for marker in (b"M06STUB:DISK_READ:M08", b"M06STUB:LOADER_HANDOFF:M08"):
+        if marker in binary:
+            raise EvidenceError("Replaced M08 service still contains its retired stub")
 
     link_rsp = target / "config/link.rsp"
     link_lines = link_rsp.read_text(encoding="ascii").splitlines()
@@ -191,6 +204,7 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         "option verbose",
         "format dos",
         "file build/startup.obj",
+        "file build/loader_services.obj",
         "library build/platform.lib",
         "name build/KVA8616.exe",
     ]
@@ -203,7 +217,8 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         "component_commit": component_commit,
         "generated_inputs": [],
         "libraries": [identity(target / "build/platform.lib", "pc88va/build/platform.lib")],
-        "link_inputs_in_order": ["pc88va/build/startup.obj", "pc88va/build/platform.lib"],
+        "link_inputs_in_order": ["pc88va/build/startup.obj", "pc88va/build/loader_services.obj",
+                                 "pc88va/build/platform.lib"],
         "link_symbol_evidence_sha256": sha256_bytes(canonical_bytes(symbol_evidence)),
         "link_response": {**identity(link_rsp, "pc88va/config/link.rsp"), "lines": link_lines},
         "objects": objects,
@@ -213,28 +228,37 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         "target_macros": EXPECTED_MACROS,
         "tools": tools,
     }
+    mz = parse_mz(artifact)
+    if mz["relocation_count"] != 0 or mz["overlay"] != 0 or mz["checksum"] != 0:
+        raise EvidenceError("Linked carrier is incompatible with the M08 zero-relocation policy")
     interface = {
         "artifact": artifact_id,
-        "artifact_role": "pc88va-compile-only-kernel-scaffold",
-        "binary": parse_mz(artifact),
-        "boot_drive_identity": {"status": "unknown", "required_by": "M08"},
+        "artifact_role": plan["artifact_role"],
+        "binary": mz,
+        "boot_drive_identity": {"status": "opaque_context_in_DX", "concrete_value": "private_overlay_only"},
         "cpu_mode": "8086-compatible-real-mode-code",
         "entry_symbol": "_pc88va_compile_only_entry",
-        "firmware_entry_state": {"status": "unknown", "required_by": "M07"},
+        "firmware_entry_state": {"status": "private_overlay_only", "source": "accepted_M07_contract"},
         "initial_register_contract": {
-            "required": [],
-            "unknown": ["AX", "BX", "CX", "DX", "SI", "DI", "BP", "DS", "ES", "FLAGS"]
+            "zero": ["AX", "BX", "CX", "SI", "DI", "BP"],
+            "DS_ES": "allocation_segment",
+            "DX": "opaque_boot_drive_context",
+            "SS_SP": "validated_MZ_stack",
+            "CS_IP": "validated_MZ_entry",
+            "IF_DF": "clear"
         },
         "loader_responsibilities": [
-            "Load the complete MZ container or define a reviewed transformation.",
-            "Apply MZ relocations before entry.",
-            "Provide the MZ-declared stack allocation.",
-            "Define physical load address and memory ownership.",
+            "Locate the exact root entry and validate the complete FAT12 chain.",
+            "Reject relocations, overlays, optional checksum and inconsistent header sizes.",
+            "Copy and compare the body; initialize and check the required allocation tail.",
+            "Validate entry, stack and all disjoint memory ownership intervals.",
+            "Transfer once to the entry with the declared register contract.",
         ],
         "memory_model": "16-bit small model for C; segmented DOS MZ",
-        "physical_load_address": {"status": "unknown", "required_by": "M08"},
-        "relocation_policy": "DOS MZ relocation records must be applied by a future loader",
-        "schema_version": 1,
+        "physical_load_address": {"status": "parameterized_private_overlay_only"},
+        "relocation_policy": "zero_only_reject_nonzero",
+        "schema_version": 2,
+        "service_markers": service_markers,
         "stub_ledger_sha256": identity(target / "config/stubs.json")["sha256"],
         "target": "pc88va",
     }

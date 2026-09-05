@@ -3,5 +3,6 @@ option statics
 option verbose
 format dos
 file build/startup.obj
+file build/loader_services.obj
 library build/platform.lib
 name build/KVA8616.exe
