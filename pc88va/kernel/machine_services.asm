@@ -65,7 +65,15 @@ pc88va_machine_init_:
         cmp ax, dx
         jne m10_init_bad
         mov byte [cs:pc88va_m10_state_], 1
-        ; The accepted loader supplies a separate 4096-byte stack below SYSM.
+        ; The linker supplies 4096 bytes starting at an intra-paragraph offset.
+        ; BP + 20 reconstructs SP before the near call and this saved frame.
+        mov bx, bp
+        add bx, 20
+        jc m10_init_failed
+        sub bx, 1000h
+        jc m10_init_failed
+        cmp bx, 15
+        ja m10_init_failed
         mov ax, ss
         mov dx, cs
         cmp dx, 0040h
@@ -78,10 +86,12 @@ pc88va_machine_init_:
         mov cl, 4
         shl ax, cl
         jc m10_init_failed
+        add ax, bx
+        jc m10_init_failed
         cmp ax, m10_storage_end
         jb m10_init_failed
         mov ax, ss
-        add ax, 0100h
+        add ax, 0101h
         jc m10_init_failed
         cmp ax, 0a000h
         ja m10_init_failed

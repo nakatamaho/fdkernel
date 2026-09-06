@@ -67,21 +67,21 @@ class ServicesTests(unittest.TestCase):
     def data(self,symbol,size):return bytes(self.cpu.mem_read(CODE*16+self.symbols[symbol],size))
     def put(self,symbol,value):self.cpu.mem_write(CODE*16+self.symbols[symbol],value)
 
-    def call(self,name,arg=0,flags=2,ds=CODE,stack=STACK,fatal=False):
+    def call(self,name,arg=0,flags=2,ds=CODE,stack=STACK,fatal=False,sp=0x0ffe):
         regs={UC_X86_REG_BX:0x1234,UC_X86_REG_CX:0x2345,UC_X86_REG_DX:0x3456,
               UC_X86_REG_SI:0x4567,UC_X86_REG_DI:0x5678,UC_X86_REG_BP:0x6789,
               UC_X86_REG_DS:ds,UC_X86_REG_ES:CODE,UC_X86_REG_SS:stack,
               UC_X86_REG_EFLAGS:flags}
         for reg,value in regs.items():self.cpu.reg_write(reg,value)
         self.cpu.reg_write(UC_X86_REG_CS,CODE)
-        self.cpu.reg_write(UC_X86_REG_SP,0x0ffc)
+        self.cpu.reg_write(UC_X86_REG_SP,sp)
         self.cpu.reg_write(UC_X86_REG_AX,arg)
-        self.cpu.mem_write(stack*16+0x0ffc,struct.pack('<H',STOP))
+        self.cpu.mem_write(stack*16+sp,struct.pack('<H',STOP))
         self.cpu.emu_start(CODE*16+self.symbols[name],CODE*16+STOP,count=2000000)
         self.assertEqual(self.outputs,[],'no controller, disk or keyboard output')
         if not fatal:
             self.assertEqual(self.cpu.reg_read(UC_X86_REG_IP),STOP,'bounded near return')
-            self.assertEqual(self.cpu.reg_read(UC_X86_REG_SP),0x0ffe)
+            self.assertEqual(self.cpu.reg_read(UC_X86_REG_SP),sp+2)
             for reg,value in regs.items():self.assertEqual(self.cpu.reg_read(reg),value)
         return self.cpu.reg_read(UC_X86_REG_AX)
 
@@ -102,6 +102,15 @@ class ServicesTests(unittest.TestCase):
             self.assertEqual(self.call(NAMES[0],flags=flags),0xffff)
         self.assertEqual(self.call(NAMES[0],stack=0xa000),0xffff)
         self.assertEqual(self.printed,[])
+
+    def test_linker_intra_paragraph_stack_boundary(self):
+        end=self.symbols['m10_storage_end']
+        self.assertEqual(self.call(NAMES[0],stack=CODE+end//16,sp=0x0ffe+end%16),0)
+        self.assertEqual(self.data(NAMES[7],1),b'\x02')
+
+    def test_stack_top_overflow_is_not_accepted(self):
+        self.assertEqual(self.call(NAMES[0],sp=0xfffc),0xffff)
+        self.assertEqual(self.data(NAMES[7],1),b'\x03')
 
     def test_memory_partition(self):
         self.assertEqual(self.call(NAMES[1],self.symbols[NAMES[5]]),0)
@@ -174,7 +183,7 @@ class ServicesTests(unittest.TestCase):
         self.call(NAMES[4],0xbeef,flags=0x202,fatal=True)
         self.assertEqual(self.cpu.reg_read(UC_X86_REG_EFLAGS)&0x200,0)
         self.assertEqual(self.cpu.reg_read(UC_X86_REG_IP),self.symbols['pc88va_m10_halt']+1)
-        self.assertEqual(self.cpu.reg_read(UC_X86_REG_SP),0x0ffc)
+        self.assertEqual(self.cpu.reg_read(UC_X86_REG_SP),0x0ffe)
         self.assertEqual(self.printed,[])
         self.assertEqual(self.reads,[])
 
