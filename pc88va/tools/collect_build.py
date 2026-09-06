@@ -27,6 +27,7 @@ COMMANDS = [
     "nasm -f obj -DPC88VA -DJAPAN -DDBCS -o build/console.obj kernel/console.asm",
     "nasm -f obj -DPC88VA -DJAPAN -DDBCS -o build/machine_services.obj kernel/machine_services.asm",
     "nasm -f obj -DPC88VA -DJAPAN -DDBCS -o build/console_input.obj kernel/console_input.asm",
+    "nasm -f obj -DPC88VA -DJAPAN -DDBCS -Iboot/ -o build/resident_disk.obj kernel/resident_disk.asm",
     "wcc -zq -0 -ms -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DJAPAN -DDBCS -fo=build/stubs.obj kernel/stubs.c",
     "python3 -c import-os-set-build/stubs.obj-mtime-from-SOURCE_DATE_EPOCH",
     "wlib -q build/platform.lib +build/stubs.obj",
@@ -138,6 +139,8 @@ def parse_link_map(path: Path) -> dict[str, object]:
         "pc88va_platform_probe_",
         "pc88va_disk_read_",
         "pc88va_loader_handoff_",
+        "pc88va_kernel_disk_read_",
+        "pc88va_kernel_firmware_read_one_",
     }
     names = {item["name"] for item in symbols}
     missing = sorted(required - names)
@@ -198,7 +201,8 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
                        "M10SERVICE:INTERRUPTS:VALIDATED_ADOPTION",
                        "M10SERVICE:CLOCK:OBSERVED_VRTC_EDGE",
                        "M10SERVICE:FATAL_STOP:CLI_HLT",
-                       "M11SERVICE:CONSOLE_GETC:MATRIX_POLL"]
+                       "M11SERVICE:CONSOLE_GETC:MATRIX_POLL",
+                       "M12SERVICE:DISK_READ:RESIDENT"]
     for marker in service_markers:
         if binary.count(marker.encode("ascii")) != 1:
             raise EvidenceError("Implemented service marker multiplicity is not one")
@@ -220,6 +224,7 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         "file build/console.obj",
         "file build/machine_services.obj",
         "file build/console_input.obj",
+        "file build/resident_disk.obj",
         "library build/platform.lib",
         "name build/KVA8616.exe",
     ]
@@ -235,6 +240,7 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         "link_inputs_in_order": ["pc88va/build/startup.obj", "pc88va/build/loader_services.obj",
                                  "pc88va/build/console.obj", "pc88va/build/machine_services.obj",
                                  "pc88va/build/console_input.obj",
+                                 "pc88va/build/resident_disk.obj",
                                  "pc88va/build/platform.lib"],
         "link_symbol_evidence_sha256": sha256_bytes(canonical_bytes(symbol_evidence)),
         "link_response": {**identity(link_rsp, "pc88va/config/link.rsp"), "lines": link_lines},

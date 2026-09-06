@@ -21,6 +21,9 @@ extern pc88va_machine_init_
 extern pc88va_fatal_stop_request_
 extern pc88va_m10_control_
 extern pc88va_m11_diagnostic_
+extern pc88va_m12_diagnostic_
+extern pc88va_m12_drive_context_
+extern pc88va_m12_call_flags_
 global pc88va_m10_i0, pc88va_m10_i9, pc88va_m10_f0, pc88va_m10_f1
 global ..start
 global _pc88va_compile_only_entry
@@ -30,6 +33,8 @@ global _pc88va_compile_only_fatal_stop
 _pc88va_compile_only_entry:
         cli
         cld
+        mov [cs:pc88va_m12_drive_context_], dx
+        mov [cs:pc88va_m12_call_flags_], bx
         call pc88va_platform_probe_
         call pc88va_console_diagnostic_
         or ax, ax
@@ -48,6 +53,9 @@ pc88va_m10_f1:
 
 pc88va_m11_entry:
         call pc88va_m11_diagnostic_
+        call pc88va_m12_diagnostic_
+        or ax, ax
+        jnz _pc88va_compile_only_fatal_stop
 
 _pc88va_compile_only_fatal_stop:
         cli

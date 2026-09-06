@@ -44,6 +44,13 @@
       "stub_removal_milestone": null
     },
     {
+      "classification": "pc88va-owned",
+      "object": "pc88va/build/resident_disk.obj",
+      "reason": "M12 resident read-only request entry and accepted firmware callback; uses the unchanged M08 validated transfer core and kernel-owned buffer.",
+      "source": "pc88va/kernel/resident_disk.asm",
+      "stub_removal_milestone": null
+    },
+    {
       "classification": "temporary-fail-closed-stub",
       "object": "pc88va/build/stubs.obj",
       "reason": "Defines unresolved PC-88VA platform services with explicit failure returns.",
