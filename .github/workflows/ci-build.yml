@@ -13,16 +13,17 @@ jobs:
   build:
     if: contains(github.event.head_commit.message, '[skip ci]') == false
 
-    runs-on: ubuntu-20.04
+    # Host adapter only: the parent retains its locked Watcom 1.9 toolchain.
+    runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
     - name: Package install
       run: |
         sudo add-apt-repository ppa:tkchia/build-ia16
         sudo apt update
-        sudo apt install gcc-ia16-elf nasm upx
+        sudo apt install --yes gcc-ia16-elf nasm upx-ucl
 
     - name: build
       run: ./ci_build.sh
