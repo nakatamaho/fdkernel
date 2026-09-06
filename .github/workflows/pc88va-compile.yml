@@ -7,6 +7,7 @@ on:
       - necpc88va
       - topic/m08-pc88va-disk-loader-handoff
       - topic/m09-pc88va-early-console-output
+      - topic/m10-pc88va-machine-services-init
     paths:
       - "pc88va/**"
       - ".github/workflows/pc88va-compile.yml"

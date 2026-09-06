@@ -1,10 +1,10 @@
 {
-  "artifact_role": "pc88va-kernel-entry-carrier-with-loader-and-early-console",
+  "artifact_role": "pc88va-kernel-entry-carrier-with-minimal-machine-services",
   "objects": [
     {
       "classification": "pc88va-owned",
       "object": "pc88va/build/startup.obj",
-      "reason": "Defines the unchanged MZ entry boundary, calls the early-console diagnostic and retains the local fatal-stop path.",
+      "reason": "Retains the MZ entry and early-console diagnostic, then invokes single-shot M10 initialization and a separate optional fatal control.",
       "source": "pc88va/kernel/startup.asm",
       "stub_removal_milestone": null
     },
@@ -27,6 +27,13 @@
       "object": "pc88va/build/console.obj",
       "reason": "Adapts printable ASCII and CR/LF to the independently public PC-88VA Text BIOS service.",
       "source": "pc88va/kernel/console.asm",
+      "stub_removal_milestone": null
+    },
+    {
+      "classification": "pc88va-owned",
+      "object": "pc88va/build/machine_services.obj",
+      "reason": "Implements conservative arena discovery, inherited interrupt-state validation, bounded observed-edge clock, initialization and fatal stop.",
+      "source": "pc88va/kernel/machine_services.asm",
       "stub_removal_milestone": null
     },
     {

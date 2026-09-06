@@ -167,7 +167,9 @@ class ConsoleTests(unittest.TestCase):
         source = (TARGET / 'kernel/stubs.c').read_text()
         self.assertNotIn('pc88va_console_putc', source)
         self.assertIn('pc88va_console_getc', source)
-        self.assertIn('pc88va_fatal_stop_request', source)
+        self.assertNotIn('pc88va_fatal_stop_request', source)
+        machine = (TARGET / 'kernel/machine_services.asm').read_text()
+        self.assertIn('pc88va_fatal_stop_request_:', machine)
 
     def test_machine_readable_contract_matches_adapter(self):
         contract = json.loads((TARGET / 'config/console-contract.json').read_text())
