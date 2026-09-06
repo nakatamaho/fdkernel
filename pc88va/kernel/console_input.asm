@@ -264,6 +264,9 @@ pc88va_m11_k5:
         mov ax, [cs:pc88va_m11_character_]
         mov [cs:pc88va_m11_history_+bx], ax
         inc word [cs:pc88va_m11_count_]
+        ; The delayed no-input control observes getc alone, without echo.
+        cmp byte [cs:pc88va_m11_control_], 1
+        je m11_after_echo
         cmp al, 8
         je m11_after_echo
         call pc88va_console_putc_
@@ -278,6 +281,11 @@ pc88va_m11_k5:
 pc88va_m11_k8:
 m11_after_echo:
         loop m11_next
+        ; A completed sample must not return the held/released last key twice.
+        mov ax, pc88va_m11_character_
+        call pc88va_console_getc_
+        cmp ax, 1
+        jne m11_diagnostic_bad
 pc88va_m11_k9:
         xor ax, ax
         ret
