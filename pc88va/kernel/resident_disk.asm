@@ -19,9 +19,13 @@ cpu 8086
 
 segment _TEXT class=CODE public use16
 
-extern pc88va_disk_read_core
 extern pc88va_m10_state_
 extern pc88va_console_putc_
+
+; Keep a resident copy of the accepted M08 validator/transfer state machine.
+; The loader object retains its historical copy; this copy is linked into the
+; kernel resident service so the public entry is not loader-only.
+%include "disk_read.inc"
 
 global pc88va_kernel_disk_read_
 global pc88va_kernel_firmware_read_one_
