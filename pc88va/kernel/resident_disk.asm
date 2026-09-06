@@ -134,9 +134,18 @@ pc88va_m12_prepare_:
 ; reached only after the normal M11 diagnostic has returned.  It records the
 ; status and completed bytes but never fabricates a successful result.
 pc88va_m12_diagnostic_:
-        cmp byte [cs:pc88va_m12_control_], 1
-        jne .disabled
+        cmp byte [cs:pc88va_m12_control_], 0
+        je .disabled
+        cmp byte [cs:pc88va_m12_control_], 3
+        ja .disabled
         call pc88va_m12_prepare_
+        cmp byte [cs:pc88va_m12_control_], 2
+        jne .invoke
+        ; Control 2 is a deliberately invalid post-boot range.  It must be
+        ; rejected by the shared validator before the firmware callback.
+        mov word [cs:pc88va_m12_request_+2], 1279
+        mov word [cs:pc88va_m12_request_+4], 2
+.invoke:
         mov ax, pc88va_m12_request_
         call pc88va_kernel_disk_read_
         mov [cs:pc88va_m12_result_+0], ax
