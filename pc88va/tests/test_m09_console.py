@@ -163,10 +163,11 @@ class ConsoleTests(unittest.TestCase):
     def test_two_execution_projections_match(self):
         self.assertEqual(self.execute([0], diagnostic=True), self.execute([0], diagnostic=True))
 
-    def test_console_stub_alone_removed(self):
+    def test_console_services_replaced_without_fatal_regression(self):
         source = (TARGET / 'kernel/stubs.c').read_text()
         self.assertNotIn('pc88va_console_putc', source)
-        self.assertIn('pc88va_console_getc', source)
+        self.assertNotIn('pc88va_console_getc', source)
+        self.assertIn('pc88va_console_getc_:', (TARGET / 'kernel/console_input.asm').read_text())
         self.assertNotIn('pc88va_fatal_stop_request', source)
         machine = (TARGET / 'kernel/machine_services.asm').read_text()
         self.assertIn('pc88va_fatal_stop_request_:', machine)

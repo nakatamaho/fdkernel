@@ -1,5 +1,5 @@
 {
-  "artifact_role": "pc88va-kernel-entry-carrier-with-minimal-machine-services",
+  "artifact_role": "pc88va-kernel-entry-carrier-with-early-console-input",
   "objects": [
     {
       "classification": "pc88va-owned",
@@ -34,6 +34,13 @@
       "object": "pc88va/build/machine_services.obj",
       "reason": "Implements conservative arena discovery, inherited interrupt-state validation, bounded observed-edge clock, initialization and fatal stop.",
       "source": "pc88va/kernel/machine_services.asm",
+      "stub_removal_milestone": null
+    },
+    {
+      "classification": "pc88va-owned",
+      "object": "pc88va/build/console_input.obj",
+      "reason": "Polls the adopted firmware keyboard queue and runs a bounded-count early input diagnostic without driver echo.",
+      "source": "pc88va/kernel/console_input.asm",
       "stub_removal_milestone": null
     },
     {

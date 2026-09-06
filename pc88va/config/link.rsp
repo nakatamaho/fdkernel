@@ -6,5 +6,6 @@ file build/startup.obj
 file build/loader_services.obj
 file build/console.obj
 file build/machine_services.obj
+file build/console_input.obj
 library build/platform.lib
 name build/KVA8616.exe

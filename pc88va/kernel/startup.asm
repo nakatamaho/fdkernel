@@ -20,6 +20,7 @@ extern pc88va_console_diagnostic_
 extern pc88va_machine_init_
 extern pc88va_fatal_stop_request_
 extern pc88va_m10_control_
+extern pc88va_m11_diagnostic_
 global pc88va_m10_i0, pc88va_m10_i9, pc88va_m10_f0, pc88va_m10_f1
 global ..start
 global _pc88va_compile_only_entry
@@ -40,10 +41,13 @@ pc88va_m10_i0:
 pc88va_m10_i9:
 pc88va_m10_f0:
         cmp byte [cs:pc88va_m10_control_], 1
-        jne _pc88va_compile_only_fatal_stop
+        jne pc88va_m11_entry
 pc88va_m10_f1:
         xor ax, ax
         call pc88va_fatal_stop_request_
+
+pc88va_m11_entry:
+        call pc88va_m11_diagnostic_
 
 _pc88va_compile_only_fatal_stop:
         cli

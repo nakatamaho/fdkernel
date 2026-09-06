@@ -26,6 +26,7 @@ COMMANDS = [
     "nasm -f obj -DPC88VA -DJAPAN -DDBCS -Iboot/ -o build/loader_services.obj kernel/loader_services.asm",
     "nasm -f obj -DPC88VA -DJAPAN -DDBCS -o build/console.obj kernel/console.asm",
     "nasm -f obj -DPC88VA -DJAPAN -DDBCS -o build/machine_services.obj kernel/machine_services.asm",
+    "nasm -f obj -DPC88VA -DJAPAN -DDBCS -o build/console_input.obj kernel/console_input.asm",
     "wcc -zq -0 -ms -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DJAPAN -DDBCS -fo=build/stubs.obj kernel/stubs.c",
     "python3 -c import-os-set-build/stubs.obj-mtime-from-SOURCE_DATE_EPOCH",
     "wlib -q build/platform.lib +build/stubs.obj",
@@ -196,13 +197,14 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
                        "M10SERVICE:MEMORY:OWNED_ARENA",
                        "M10SERVICE:INTERRUPTS:VALIDATED_ADOPTION",
                        "M10SERVICE:CLOCK:OBSERVED_VRTC_EDGE",
-                       "M10SERVICE:FATAL_STOP:CLI_HLT"]
+                       "M10SERVICE:FATAL_STOP:CLI_HLT",
+                       "M11SERVICE:CONSOLE_GETC:KEYBOARD_BIOS"]
     for marker in service_markers:
         if binary.count(marker.encode("ascii")) != 1:
             raise EvidenceError("Implemented service marker multiplicity is not one")
     for marker in (b"M06STUB:DISK_READ:M08", b"M06STUB:LOADER_HANDOFF:M08", b"M06STUB:CONSOLE_OUTPUT:M09",
                    b"M06STUB:MACHINE_INIT:M10", b"M06STUB:MEMORY:M10", b"M06STUB:INTERRUPTS:M10",
-                   b"M06STUB:TIMER_CLOCK:M10", b"M06STUB:FATAL_STOP:M10"):
+                   b"M06STUB:TIMER_CLOCK:M10", b"M06STUB:FATAL_STOP:M10", b"M06STUB:CONSOLE_INPUT:M11"):
         if marker in binary:
             raise EvidenceError("Implemented service still contains its retired stub")
 
@@ -217,6 +219,7 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         "file build/loader_services.obj",
         "file build/console.obj",
         "file build/machine_services.obj",
+        "file build/console_input.obj",
         "library build/platform.lib",
         "name build/KVA8616.exe",
     ]
@@ -231,6 +234,7 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
         "libraries": [identity(target / "build/platform.lib", "pc88va/build/platform.lib")],
         "link_inputs_in_order": ["pc88va/build/startup.obj", "pc88va/build/loader_services.obj",
                                  "pc88va/build/console.obj", "pc88va/build/machine_services.obj",
+                                 "pc88va/build/console_input.obj",
                                  "pc88va/build/platform.lib"],
         "link_symbol_evidence_sha256": sha256_bytes(canonical_bytes(symbol_evidence)),
         "link_response": {**identity(link_rsp, "pc88va/config/link.rsp"), "lines": link_lines},

@@ -2,13 +2,6 @@
   "failure_return": -1,
   "interfaces": [
     {
-      "abi": "near C call; caller-owned character pointer; signed 16-bit status return",
-      "marker": "M06STUB:CONSOLE_INPUT:M11",
-      "name": "pc88va_console_getc",
-      "removal_milestone": "M11",
-      "service": "keyboard and console input"
-    },
-    {
       "abi": "near C call; caller-owned NLS request pointer; signed 16-bit status return",
       "marker": "M06STUB:NLS_DBCS:M17",
       "name": "pc88va_nls_hook",
