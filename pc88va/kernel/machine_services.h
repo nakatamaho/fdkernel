@@ -19,7 +19,8 @@ struct pc88va_memory_record {
 };
 struct pc88va_clock_record {
   unsigned short version;
-  unsigned long observed_edges; /* Modulo 2^32; not elapsed time. */
+  unsigned long observed_edges; /* Origin zero at first source sample, then
+                                * observed edges modulo 2^32; not elapsed time. */
 };
 #pragma pack(pop)
 int pc88va_machine_init(void);

@@ -13,7 +13,7 @@ TARGET = Path(__file__).resolve().parents[1]
 NAMES = ['pc88va_machine_init_', 'pc88va_memory_query_', 'pc88va_interrupts_init_',
          'pc88va_clock_read_', 'pc88va_fatal_stop_request_', 'pc88va_m10_memory_record_',
          'pc88va_m10_clock_record_', 'pc88va_m10_state_', 'm10_ticks', 'm10_clock_busy',
-         'm10_arena', 'm10_arena_end', 'pc88va_m10_halt', 'm10_storage_end']
+         'm10_arena', 'm10_arena_end', 'pc88va_m10_halt', 'm10_storage_end', 'm10_clock_origin']
 CODE, STACK, STOP = 0x1000, 0x1800, 0xff00
 
 
@@ -49,7 +49,7 @@ class ServicesTests(unittest.TestCase):
             if port in self.masks:return self.masks[port]
             self.assertEqual(port,0x40)
             if self.status is not None:return self.status
-            return 0x20 if self.reads.count(0x40)%2==0 else 0
+            return 0xe0 if self.reads.count(0x40)%2==0 else 0xc0
         def port_out(cpu,port,size,value,data):self.outputs.append((port,size,value))
         def interrupt(cpu,number,data):
             self.assertEqual(number,0x83)
@@ -89,7 +89,7 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(self.call(NAMES[0]),0)
         self.assertEqual(self.data('pc88va_m10_state_',1),b'\x02')
         self.assertEqual(bytes(self.printed),b'M10 INIT OK\r\n')
-        self.assertEqual(self.data('m10_ticks',4),struct.pack('<I',2))
+        self.assertEqual(self.data('m10_ticks',4),struct.pack('<I',1))
         previous=bytes(self.cpu.mem_read(CODE*16,len(self.binary)))
         self.assertEqual(self.call(NAMES[0]),0xffff)
         self.assertEqual(bytes(self.cpu.mem_read(CODE*16,len(self.binary))),previous)
@@ -155,17 +155,25 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(self.data(NAMES[6],2),b'\0\0')
 
     def test_clock_order_carry_and_wrap(self):
+        self.put('m10_clock_origin',b'\x01')
         for initial in (0,0xffff,0xffffffff):
             self.put('m10_ticks',struct.pack('<I',initial))
             self.assertEqual(self.call(NAMES[3],self.symbols[NAMES[6]]),0)
             self.assertEqual(struct.unpack('<HI',self.data(NAMES[6],6)),(1,(initial+1)&0xffffffff))
 
     def test_clock_source_failure_no_fabricated_progress(self):
-        for status in (0,0x20):
+        self.put('m10_clock_origin',b'\x01')
+        for status in (0,0xff,0xc0,0xe0):
             self.status=status
             before=self.data('m10_ticks',4),self.data(NAMES[6],6)
             self.assertEqual(self.call(NAMES[3],self.symbols[NAMES[6]]),0xffff)
             self.assertEqual((self.data('m10_ticks',4),self.data(NAMES[6],6)),before)
+
+    def test_initial_source_sample_is_origin_not_fabricated_progress(self):
+        self.assertEqual(self.call(NAMES[3],self.symbols[NAMES[6]]),0)
+        self.assertEqual(struct.unpack('<HI',self.data(NAMES[6],6)),(1,0))
+        self.assertEqual(self.call(NAMES[3],self.symbols[NAMES[6]]),0)
+        self.assertEqual(struct.unpack('<HI',self.data(NAMES[6],6)),(1,1))
 
     def test_clock_reentrancy(self):
         self.put('m10_clock_busy',b'\x01')

@@ -161,6 +161,7 @@ m10_init_failed:
         mov byte [cs:m10_interrupts_valid], 0
         mov word [cs:m10_ticks], 0
         mov word [cs:m10_ticks+2], 0
+        mov byte [cs:m10_clock_origin], 0
         ; Public result records are invalidated after a failed transaction.
         mov word [cs:pc88va_m10_memory_record_], 0
         mov word [cs:pc88va_m10_clock_record_], 0
@@ -289,6 +290,21 @@ pc88va_clock_read_:
         cmp byte [cs:m10_clock_busy], 0
         jne .bad
         mov byte [cs:m10_clock_busy], 1
+        ; A valid source sample establishes origin zero; it does not claim
+        ; elapsed progress. A subsequent read must observe a real rising edge.
+        in al, 040h
+        and al, 0cch
+        cmp al, 0c0h
+        jne .timeout
+        cmp byte [cs:m10_clock_origin], 0
+        jne .next_edge
+        cmp word [cs:m10_ticks], 0
+        jne .timeout
+        cmp word [cs:m10_ticks+2], 0
+        jne .timeout
+        mov byte [cs:m10_clock_origin], 1
+        jmp short .record
+.next_edge:
         ; Each half has an instruction-count bound independent of host time.
         mov cx, 0ffffh
 .low:
@@ -312,6 +328,7 @@ pc88va_clock_read_:
 .edge:
         add word [cs:m10_ticks], 1
         adc word [cs:m10_ticks+2], 0
+.record:
         mov ax, [cs:m10_ticks]
         mov [cs:pc88va_m10_clock_record_+2], ax
         mov ax, [cs:m10_ticks+2]
@@ -340,6 +357,7 @@ pc88va_m10_state_: db 0
 pc88va_m10_control_: db 0
 m10_interrupts_valid: db 0
 m10_clock_busy: db 0
+m10_clock_origin: db 0
 m10_masks: dw 0
 m10_banks: dw 0
 m10_ticks: dd 0
