@@ -198,7 +198,7 @@ def collect(repo_root: Path, output: Path, component_commit: str, source_archive
                        "M10SERVICE:INTERRUPTS:VALIDATED_ADOPTION",
                        "M10SERVICE:CLOCK:OBSERVED_VRTC_EDGE",
                        "M10SERVICE:FATAL_STOP:CLI_HLT",
-                       "M11SERVICE:CONSOLE_GETC:KEYBOARD_BIOS"]
+                       "M11SERVICE:CONSOLE_GETC:MATRIX_POLL"]
     for marker in service_markers:
         if binary.count(marker.encode("ascii")) != 1:
             raise EvidenceError("Implemented service marker multiplicity is not one")

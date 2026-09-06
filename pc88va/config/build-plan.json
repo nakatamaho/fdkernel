@@ -39,7 +39,7 @@
     {
       "classification": "pc88va-owned",
       "object": "pc88va/build/console_input.obj",
-      "reason": "Polls the adopted firmware keyboard queue and runs a bounded-count early input diagnostic without driver echo.",
+      "reason": "Polls the read-only keyboard matrix and runs a bounded-count early input diagnostic without driver echo or firmware calls.",
       "source": "pc88va/kernel/console_input.asm",
       "stub_removal_milestone": null
     },
