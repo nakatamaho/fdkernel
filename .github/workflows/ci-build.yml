@@ -43,7 +43,7 @@ jobs:
     - name: upload
       if: github.repository == 'FDOS/kernel' &&
         (github.event_name == 'push' || github.event.pull_request.merged == true)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ${{ steps.snapshotname.outputs.fname }}
         path: _output/K*.???
