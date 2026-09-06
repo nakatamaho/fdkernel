@@ -112,7 +112,8 @@ pc88va_kernel_firmware_read_one_:
 ; caller may replace LBA/COUNT before invoking pc88va_kernel_disk_read_.
 pc88va_m12_prepare_:
         mov word [cs:pc88va_m12_request_+0], 1
-        mov word [cs:pc88va_m12_request_+2], 20
+        ; The deterministic M12 fixture occupies sectors 200 and 201.
+        mov word [cs:pc88va_m12_request_+2], 200
         mov word [cs:pc88va_m12_request_+4], 2
         mov word [cs:pc88va_m12_request_+6], pc88va_m12_buffer_
         mov word [cs:pc88va_m12_request_+8], cs
