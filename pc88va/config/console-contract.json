@@ -28,6 +28,7 @@
   "preconditions": [
     "accepted M08 kernel-entry ownership and valid MZ stack",
     "inherited nonzero firmware vector and valid display state",
+    "inherited BIOS ROM-bank and interrupt-controller operational state; per-call bank and mask restoration required",
     "firmware handler returns within externally bounded qualification",
     "private qualification proves firmware stack use within owned reserve"
   ],

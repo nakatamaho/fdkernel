@@ -18,6 +18,7 @@ global pc88va_console_putc_
 global pc88va_console_diagnostic_
 global _pc88va_m09_message
 global _pc88va_m09_diagnostic_complete
+global _pc88va_console_preconditions_valid
 global pc88va_console_putc_.ready
 global pc88va_console_putc_.firmware
 
@@ -78,6 +79,20 @@ pc88va_console_putc_:
 pc88va_console_diagnostic_:
         pushf
         push si
+        ; Establish the diagnostic precondition before its first putc call.
+        ; Each standalone putc still validates its own inherited vector.
+        push bx
+        push es
+        xor bx, bx
+        mov es, bx
+        mov bx, [es:083h * 4]
+        or bx, [es:083h * 4 + 2]
+        pop es
+        pop bx
+        jnz _pc88va_console_preconditions_valid
+        mov ax, 0ffffh
+        jmp _pc88va_m09_diagnostic_complete
+_pc88va_console_preconditions_valid:
         mov si, _pc88va_m09_message
 .next:
         xor ax, ax
