@@ -261,25 +261,44 @@ STATIC void setup_int_vectors(void)
   } vectors[] =
     {
       /* all of these are in the DOS DS */
-      { 0x0, FP_OFF(int0_handler) },   /* zero divide */
-      { 0x1, FP_OFF(empty_handler) },  /* single step */
-      { 0x3, FP_OFF(empty_handler) },  /* debug breakpoint */
-      { 0x6, FP_OFF(int6_handler) },   /* invalid opcode */
-      { 0x19, FP_OFF(int19_handler) },
-      { 0x20, FP_OFF(int20_handler) },
-      { 0x21, FP_OFF(int21_handler) },
-      { 0x22, FP_OFF(int22_handler) },
-      { 0x24, FP_OFF(int24_handler) },
-      { 0x25, FP_OFF(low_int25_handler) },
-      { 0x26, FP_OFF(low_int26_handler) },
-      { 0x27, FP_OFF(int27_handler) },
-      { 0x28, FP_OFF(int28_handler) },
-      { 0x2a, FP_OFF(int2a_handler) },
-      { 0x2f, FP_OFF(int2f_handler) }
+      { 0x0, 0 },   /* zero divide */
+      { 0x1, 0 },   /* single step */
+      { 0x3, 0 },   /* debug breakpoint */
+      { 0x6, 0 },   /* invalid opcode */
+      { 0x19, 0 },
+      { 0x20, 0 },
+      { 0x21, 0 },
+      { 0x22, 0 },
+      { 0x24, 0 },
+      { 0x25, 0 },
+      { 0x26, 0 },
+      { 0x27, 0 },
+      { 0x28, 0 },
+      { 0x2a, 0 },
+      { 0x2f, 0 }
     };
   struct vec *pvec;
   struct lowvec FAR *plvec;
   int i;
+
+  /* Compact-model function pointers are far and cannot be constant
+     initializers for the 16-bit offset table.  Resolve their offsets after
+     startup while retaining the common vector installation loop. */
+  vectors[0].handleroff = FP_OFF(int0_handler);
+  vectors[1].handleroff = FP_OFF(empty_handler);
+  vectors[2].handleroff = FP_OFF(empty_handler);
+  vectors[3].handleroff = FP_OFF(int6_handler);
+  vectors[4].handleroff = FP_OFF(int19_handler);
+  vectors[5].handleroff = FP_OFF(int20_handler);
+  vectors[6].handleroff = FP_OFF(int21_handler);
+  vectors[7].handleroff = FP_OFF(int22_handler);
+  vectors[8].handleroff = FP_OFF(int24_handler);
+  vectors[9].handleroff = FP_OFF(low_int25_handler);
+  vectors[10].handleroff = FP_OFF(low_int26_handler);
+  vectors[11].handleroff = FP_OFF(int27_handler);
+  vectors[12].handleroff = FP_OFF(int28_handler);
+  vectors[13].handleroff = FP_OFF(int2a_handler);
+  vectors[14].handleroff = FP_OFF(int2f_handler);
 
 #if defined(PC88VA)
   pc88va_vectors_atomic = 1;
