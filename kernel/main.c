@@ -91,6 +91,12 @@ VOID ASMCFUNC FreeDOSmain(void)
                         */
 
   drv = LoL->BootDrive + 1;
+#if defined(PC88VA)
+  /* The PC-88VA loader carries the boot drive in the resident handoff.  The
+     IBM-PC UPX scratch/BDA location is not part of this platform contract. */
+  drv = 1;
+  fmemcpy(&InitKernelConfig, &LowKernelConfig, sizeof(InitKernelConfig));
+#else
   p = MK_FP(0, 0x5e0);
   if (fmemcmp(p+2,"CONFIG",6) == 0)      /* UPX */
   {
@@ -107,6 +113,7 @@ VOID ASMCFUNC FreeDOSmain(void)
 
   if (drv >= 0x80)
     drv = 3; /* C: */
+#endif
   LoL->BootDrive = drv;
 
   /* init master environment start */
@@ -118,7 +125,9 @@ VOID ASMCFUNC FreeDOSmain(void)
   /* install DOS API and other interrupt service routines, basic kernel functionality works */
   setup_int_vectors();
 
+#if !defined(PC88VA)
   CheckContinueBootFromHarddisk();
+#endif
 
   /* display copyright info and kernel emulation status */
   signon();
@@ -700,6 +709,9 @@ VOID init_fatal(BYTE * err_msg)
 
 STATIC VOID InitPrinters(VOID)
 {
+#if defined(PC88VA)
+  return;
+#else
   iregs r;
   int num_printers, i;
 
@@ -713,10 +725,14 @@ STATIC VOID InitPrinters(VOID)
     r.d.x = i;
     init_call_intr(0x17, &r);
   }
+#endif
 }
 
 STATIC VOID InitSerialPorts(VOID)
 {
+#if defined(PC88VA)
+  return;
+#else
   iregs r;
   int serial_ports, i;
 
@@ -730,6 +746,7 @@ STATIC VOID InitSerialPorts(VOID)
     r.d.x = i;
     init_call_intr(0x14, &r);
   }
+#endif
 }
 
 /*****************************************************************
@@ -763,6 +780,9 @@ STATIC int EmulatedDriveStatus(int drive,char statusOnly)
 
 STATIC void CheckContinueBootFromHarddisk(void)
 {
+#if defined(PC88VA)
+  return;
+#else
   char *bootedFrom = "Floppy/CD";
   iregs r;
   int key;
@@ -829,3 +849,4 @@ STATIC void CheckContinueBootFromHarddisk(void)
 #endif
   }
 }
+#endif

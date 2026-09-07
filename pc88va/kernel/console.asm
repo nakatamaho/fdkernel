@@ -12,6 +12,98 @@ bits 16
 %endif
 
 %ifndef CONSOLE_FLAT_TEST
+; DOS-C's generic IO dispatcher consumes this table.  The table is PC-88VA
+; owned, while DOS semantics (request packets and status bits) remain in the
+; common io.asm implementation.
+segment _IO_FIXED_DATA
+global ConTable
+ConTable:       db 0Ah
+                dw ConInit
+                dw _IOExit
+                dw _IOExit
+                dw _IOCommandError
+                dw ConRead
+                dw CommonNdRdExit
+                dw CommonNdRdExit
+                dw ConInpFlush
+                dw ConWrite
+                dw ConWrite
+                dw _IOExit
+
+segment _TEXT class=CODE public use16
+extern _IOExit, _IODone, _IOErrorExit, _IOCommandError, _ReqPktPtr
+extern pc88va_console_getc_
+extern pc88va_m11_character_
+
+; Bridge the common device-driver call (DS = DOS data) to the M11 ABI (DS = CS).
+global pc88va_dos_getc_
+pc88va_dos_getc_:
+                push ds
+                push cs
+                pop ds
+                mov ax, pc88va_m11_character_
+                call pc88va_console_getc_
+                pop ds
+                ret
+
+global ConInit, ConRead, ConInpFlush, ConWrite, CommonNdRdExit
+ConInit:
+                jmp _IOExit
+
+ConRead:
+                jcxz ConReadDone
+ConReadLoop:
+                call pc88va_dos_getc_
+                cmp ax, 1
+                je ConReadLoop
+                or ax, ax
+                jz ConReadReady
+                jmp _IOErrorExit
+ConReadReady:
+                mov al, [cs:pc88va_m11_character_]
+                stosb
+                loop ConReadLoop
+ConReadDone:
+                jmp _IOExit
+
+; Non-destructive status is a single M11 poll.  The common dispatcher owns the
+; request packet and maps busy/done/error status for DOS callers.
+CommonNdRdExit:
+                call pc88va_dos_getc_
+                cmp ax, 1
+                jne CommonNdCheck
+                jmp _IODone
+CommonNdCheck:
+                or ax, ax
+                jz CommonNdReady
+                jmp _IOErrorExit
+CommonNdReady:
+                lds bx, [cs:_ReqPktPtr]
+                cmp byte [bx+2], 6
+                je _IOExit
+                mov al, [cs:pc88va_m11_character_]
+                mov [bx+0Dh], al
+                jmp _IOExit
+
+ConInpFlush:
+                jmp _IOExit
+
+ConWrite:
+                or cx, cx
+                jnz ConWriteLoop
+                jmp _IOExit
+ConWriteLoop:
+                xor ax, ax
+                mov al, [es:di]
+                inc di
+                call pc88va_console_putc_
+                or ax, ax
+                jz ConWriteReady
+                jmp _IOErrorExit
+ConWriteReady:
+                loop ConWriteLoop
+                jmp _IOExit
+%else
 segment _TEXT class=CODE public use16
 %endif
 global pc88va_console_putc_

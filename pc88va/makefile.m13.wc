@@ -1,0 +1,203 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# M13 Open Watcom target: common FreeDOS core plus PC-88VA adapters.
+
+CC=wcc
+NASM=nasm
+LINKER=wlink
+PYTHON=python3
+
+CFLAGS=-zq -0 -ms -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DMAX_SEC_SIZE=4096 -DBIG_SECTOR=1 -I=../hdr -I=../kernel -I=kernel
+NASMFLAGS=-f obj -DPC88VA -DXCPU=86 -i../hdr/ -i../kernel/ -ipc88va/boot/
+
+COMMON_ASM=kernel entry io serial printer asmsupt execrh nlssupt procsupt dosidle int2f apisupt intr irqstack memdisk cpu
+COMMON_C=blockio break chario dosfns dsk error fatdir fatfs fattab fcbfns inthndlr ioctl memmgr misc lfnapi newstuff network nls prf strings syspack systime task main config initoem initdisk initclk sysclk
+OBJECTS=build/kernel.obj build/entry.obj build/io.obj build/serial.obj build/printer.obj build/asmsupt.obj build/execrh.obj build/nlssupt.obj build/procsupt.obj build/dosidle.obj build/int2f.obj build/apisupt.obj build/intr.obj build/irqstack.obj build/memdisk.obj build/cpu.obj build/blockio.obj build/break.obj build/chario.obj build/dosfns.obj build/dsk.obj build/error.obj build/fatdir.obj build/fatfs.obj build/fattab.obj build/fcbfns.obj build/inthndlr.obj build/ioctl.obj build/memmgr.obj build/misc.obj build/lfnapi.obj build/newstuff.obj build/network.obj build/nls.obj build/prf.obj build/strings.obj build/syspack.obj build/systime.obj build/task.obj build/main.obj build/config.obj build/initoem.obj build/initdisk.obj build/initclk.obj build/sysclk.obj build/console_m13.obj build/m13_platform.obj build/loader_services.obj build/machine_services.obj build/console_input.obj build/resident_disk.obj build/stubs.obj
+
+.PHONY: all clean
+
+all: bin/KERNEL.SYS build/KVA8616.map
+
+# wmake deliberately uses explicit rules here.  The pinned Open Watcom 1.9
+# wmake does not implement GNU make's foreach/eval extensions, and a silently
+# ignored generated rule would produce a loader-only link.
+build/kernel.obj: ../kernel/kernel.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/entry.obj: ../kernel/entry.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/io.obj: ../kernel/io.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/serial.obj: ../kernel/serial.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/printer.obj: ../kernel/printer.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/asmsupt.obj: ../kernel/asmsupt.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/execrh.obj: ../kernel/execrh.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/nlssupt.obj: ../kernel/nlssupt.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/procsupt.obj: ../kernel/procsupt.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/dosidle.obj: ../kernel/dosidle.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/int2f.obj: ../kernel/int2f.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/apisupt.obj: ../kernel/apisupt.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/intr.obj: ../kernel/intr.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/irqstack.obj: ../kernel/irqstack.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/memdisk.obj: ../kernel/memdisk.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+build/cpu.obj: ../kernel/cpu.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/blockio.obj: ../kernel/blockio.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/break.obj: ../kernel/break.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/chario.obj: ../kernel/chario.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/dosfns.obj: ../kernel/dosfns.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/dsk.obj: ../kernel/dsk.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/error.obj: ../kernel/error.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/fatdir.obj: ../kernel/fatdir.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/fatfs.obj: ../kernel/fatfs.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/fattab.obj: ../kernel/fattab.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/fcbfns.obj: ../kernel/fcbfns.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/inthndlr.obj: ../kernel/inthndlr.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/ioctl.obj: ../kernel/ioctl.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/memmgr.obj: ../kernel/memmgr.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/misc.obj: ../kernel/misc.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/lfnapi.obj: ../kernel/lfnapi.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/newstuff.obj: ../kernel/newstuff.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/network.obj: ../kernel/network.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/nls.obj: ../kernel/nls.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/prf.obj: ../kernel/prf.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/strings.obj: ../kernel/strings.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/syspack.obj: ../kernel/syspack.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/systime.obj: ../kernel/systime.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/task.obj: ../kernel/task.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/main.obj: ../kernel/main.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/config.obj: ../kernel/config.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/initoem.obj: ../kernel/initoem.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/initdisk.obj: ../kernel/initdisk.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/initclk.obj: ../kernel/initclk.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+build/sysclk.obj: ../kernel/sysclk.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ $<
+
+build/console_m13.obj: kernel/console.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/m13_platform.obj: kernel/m13_platform.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ $<
+
+build/loader_services.obj: kernel/loader_services.asm boot/loader_abi.inc boot/disk_read.inc boot/loader_handoff.inc boot/mz_validate.inc boot/mz_transform.inc
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ kernel/loader_services.asm
+
+build/machine_services.obj: kernel/machine_services.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ kernel/machine_services.asm
+
+build/console_input.obj: kernel/console_input.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ kernel/console_input.asm
+
+build/resident_disk.obj: kernel/resident_disk.asm boot/loader_abi.inc boot/disk_read.inc
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -Iboot/ -o $@ kernel/resident_disk.asm
+
+build/stubs.obj: kernel/stubs.c
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ kernel/stubs.c
+
+build/platform.lib: build/stubs.obj
+	-rm -f $@
+	$(PYTHON) -c "import os; epoch=int(os.environ['SOURCE_DATE_EPOCH']); os.utime('build/stubs.obj',(epoch,epoch))"
+	wlib -q $@ +build/stubs.obj
+
+build/KVA8616.exe: $(OBJECTS) build/platform.lib config/m13-link.rsp
+	$(LINKER) @config/m13-link.rsp
+
+bin/KERNEL.SYS: build/KVA8616.exe
+	-mkdir -p bin
+	cp $< $@
+
+build/KVA8616.map: build/KVA8616.exe
+
+clean: .SYMBOLIC
+	-rm -rf build bin

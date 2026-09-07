@@ -504,7 +504,10 @@ CALL_NLS:
 		ret	6
 
 ; extern UWORD ASMPASCAL floppy_change(UWORD drives)
-
+; PC-88VA supplies the bounded read-only adapter implementation.  Keeping
+; this IBM/redirector helper out of that link avoids a duplicate symbol and
+; prevents an accidental host INT 2F probe from becoming a disk service.
+%ifndef PC88VA
 		global FLOPPY_CHANGE
 FLOPPY_CHANGE:
 		pop	cx		; ret addr
@@ -515,6 +518,7 @@ FLOPPY_CHANGE:
 		int	0x2f
 		mov	ax, cx		; return
 		ret
+%endif
 
 ;
 ; Test to see if a umb driver has been loaded.

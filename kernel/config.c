@@ -1007,6 +1007,12 @@ STATIC struct table * LookUp(struct table *p, BYTE * token)
 
 UWORD GetBiosKey(int timeout)
 {
+#if defined(PC88VA)
+  /* CONFIG.SYS policy is deterministic for the PC-88VA session.  Keyboard
+     input is owned by the M11 adapter, not by an IBM-PC BIOS vector. */
+  (void)timeout;
+  return 0xffff;
+#else
   iregs r;
 
   ULONG startTime = GetBiosTime();
@@ -1038,6 +1044,7 @@ UWORD GetBiosKey(int timeout)
   r.a.x = 0x0000;
   init_call_intr(0x16, &r);
   return r.a.x;
+#endif
 }
 
 STATIC BOOL SkipLine(char *pLine)

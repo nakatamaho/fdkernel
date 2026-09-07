@@ -96,6 +96,12 @@ configend:
 
 realentry:                              ; execution continues here
 
+%ifdef PC88VA
+                ; The PC-88VA loader has already established the resident
+                ; entry contract.  IBM-PC trace output and INT 10h are not
+                ; valid platform services here.
+                jmp     IGROUP:kernel_start
+%else
                 push ax
                 push bx
                 pushf              
@@ -107,6 +113,7 @@ realentry:                              ; execution continues here
                 pop ax
 
                 jmp     IGROUP:kernel_start
+%endif
 beyond_entry:   times   256-(beyond_entry-entry) db 0
                                         ; scratch area for data (DOS_PSP)
 _master_env equ $ - 128
@@ -122,6 +129,31 @@ segment INIT_TEXT
                 ;
 kernel_start:
 
+%ifdef PC88VA
+                ; Keep the common segment groups, but do not relocate through
+                ; an IBM-PC INT 12h/BDA path.  The PC-88VA memory adapter has
+                ; already reserved the resident callback and stack area.
+                cli
+                mov     ax,I_GROUP
+                mov     ss,ax
+                mov     sp,init_tos
+                mov     ax,cs
+                mov     ds,ax
+                mov     es,ax
+                extern  pc88va_machine_init_
+                call    pc88va_machine_init_
+                or      ax,ax
+                jnz     kernel_platform_halt
+                mov     ds,[cs:_INIT_DGROUP]
+                push    ds
+                pop     es
+                cld
+                jmp     _FreeDOSmain
+kernel_platform_halt:
+                cli
+                hlt
+                jmp short kernel_platform_halt
+%else
                 push bx
                 pushf              
                 mov ax, 0e32h           ; '2' Tracecode - kernel entered
@@ -219,6 +251,7 @@ cont:           ; Now set up call frame
                 mov     ds,ax
                 mov     es,ax
                 jmp     _FreeDOSmain
+%endif
 
 %if XCPU != 86
         cpu 8086

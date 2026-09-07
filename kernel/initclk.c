@@ -45,6 +45,10 @@ STATIC int InitBcdToByte(int x)
 
 void Init_clk_driver(void)
 {
+#if defined(PC88VA)
+  /* M10 owns the platform clock edge.  No IBM-PC INT 1Ah probe is valid here. */
+  return;
+#else
   static iregs regsT = {0x200}; /* ah=0x02 */
   static iregs regsD = {0x400, 0, 0x1400, 0x101};
                       /* ah=4, ch=20^ ^cl=0, ^dh=dl=1 (2000/1/1)
@@ -71,4 +75,5 @@ void Init_clk_driver(void)
   dosregs.d.b.h = InitBcdToByte(regsT.d.b.h);   /*seconds */
   dosregs.d.b.l = 0;
   init_call_intr(0x21, &dosregs);
+#endif
 }

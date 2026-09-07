@@ -4,8 +4,10 @@ This directory is the independent PC-88VA machine boundary.  M06 deliberately
 builds only a linked kernel scaffold: it establishes the target selector,
 binary interface, deterministic link order, and fail-closed service boundary.
 M08 adds parameterized disk-read and zero-relocation MZ handoff cores. The
-carrier remains without FreeDOS common-core integration, console, keyboard,
-timer, interrupt initialization, memory discovery or a usable DOS runtime.
+historical `makefile.wc` target remains the M06-M12 compile-only carrier and
+is intentionally unchanged. M13 adds `makefile.m13.wc`, which links the
+FreeDOS common kernel core with the PC-88VA resident M12 block adapter and the
+M09/M11 console adapters. The M13 target is read-only and ASCII-only.
 
 The build must run in the accepted Linux/amd64 Open Watcom 1.9 environment:
 
@@ -29,8 +31,24 @@ The entry point remains unchanged and always reaches a local fatal
 stop after probing the fail-closed interface object.  It performs no firmware
 interrupt or I/O-port access.
 
-The target defines `PC88VA`, `JAPAN`, and `DBCS`.  It rejects `NEC98` and
-`IBMPC`; no source below `nec98/` or `ibmpc/` is a link input.
+The historical target defines `PC88VA`, `JAPAN`, and `DBCS`. The M13 target
+defines only `PC88VA` (plus common-core large-sector switches); it rejects
+`NEC98` and `IBMPC`, and no source below `nec98/` or `ibmpc/` is a link input.
+
+For the M13 common-core build use the pinned Linux/amd64 Open Watcom
+environment and the explicit target:
+
+```sh
+cd pc88va
+wmake -ms -h -f makefile.m13.wc clean all
+```
+
+This target links `kernel/main.c`, `inthndlr.c`, FAT12, memory/process, EXEC,
+and console objects from the common tree. `kernel/m13_platform.asm` is a
+read-only adapter: every block mutation operation returns the documented DOS
+write-protect error before reaching the M12 firmware callback. The adapter
+chunks DOS reads into validated resident requests and never exposes its
+kernel-owned 4 KiB scratch region to an application.
 
 The two M08 C-call adapters are in `kernel/loader_services.asm`; they link the
 same assembly cores used by the loader. Their packed near-pointer contracts
