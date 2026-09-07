@@ -22,148 +22,148 @@ all: bin/KERNEL.SYS build/KVA8616.map
 # ignored generated rule would produce a loader-only link.
 build/kernel.obj: ../kernel/kernel.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/kernel.asm
 build/entry.obj: ../kernel/entry.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/entry.asm
 build/io.obj: ../kernel/io.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/io.asm
 build/serial.obj: ../kernel/serial.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/serial.asm
 build/printer.obj: ../kernel/printer.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/printer.asm
 build/asmsupt.obj: ../kernel/asmsupt.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/asmsupt.asm
 build/execrh.obj: ../kernel/execrh.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/execrh.asm
 build/nlssupt.obj: ../kernel/nlssupt.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/nlssupt.asm
 build/procsupt.obj: ../kernel/procsupt.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/procsupt.asm
 build/dosidle.obj: ../kernel/dosidle.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/dosidle.asm
 build/int2f.obj: ../kernel/int2f.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/int2f.asm
 build/apisupt.obj: ../kernel/apisupt.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/apisupt.asm
 build/intr.obj: ../kernel/intr.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/intr.asm
 build/irqstack.obj: ../kernel/irqstack.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/irqstack.asm
 build/memdisk.obj: ../kernel/memdisk.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/memdisk.asm
 build/cpu.obj: ../kernel/cpu.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ ../kernel/cpu.asm
 
 build/blockio.obj: ../kernel/blockio.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/blockio.c
 build/break.obj: ../kernel/break.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/break.c
 build/chario.obj: ../kernel/chario.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/chario.c
 build/dosfns.obj: ../kernel/dosfns.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/dosfns.c
 build/dsk.obj: ../kernel/dsk.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/dsk.c
 build/error.obj: ../kernel/error.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/error.c
 build/fatdir.obj: ../kernel/fatdir.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/fatdir.c
 build/fatfs.obj: ../kernel/fatfs.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/fatfs.c
 build/fattab.obj: ../kernel/fattab.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/fattab.c
 build/fcbfns.obj: ../kernel/fcbfns.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/fcbfns.c
 build/inthndlr.obj: ../kernel/inthndlr.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/inthndlr.c
 build/ioctl.obj: ../kernel/ioctl.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/ioctl.c
 build/memmgr.obj: ../kernel/memmgr.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/memmgr.c
 build/misc.obj: ../kernel/misc.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/misc.c
 build/lfnapi.obj: ../kernel/lfnapi.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/lfnapi.c
 build/newstuff.obj: ../kernel/newstuff.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/newstuff.c
 build/network.obj: ../kernel/network.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/network.c
 build/nls.obj: ../kernel/nls.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/nls.c
 build/prf.obj: ../kernel/prf.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/prf.c
 build/strings.obj: ../kernel/strings.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/strings.c
 build/syspack.obj: ../kernel/syspack.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/syspack.c
 build/systime.obj: ../kernel/systime.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/systime.c
 build/task.obj: ../kernel/task.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/task.c
 build/main.obj: ../kernel/main.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/main.c
 build/config.obj: ../kernel/config.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/config.c
 build/initoem.obj: ../kernel/initoem.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/initoem.c
 build/initdisk.obj: ../kernel/initdisk.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/initdisk.c
 build/initclk.obj: ../kernel/initclk.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/initclk.c
 build/sysclk.obj: ../kernel/sysclk.c
 	-mkdir -p build bin
-	$(CC) $(CFLAGS) -fo=$@ $<
+	$(CC) $(CFLAGS) -fo=$@ ../kernel/sysclk.c
 
 build/console_m13.obj: kernel/console.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ kernel/console.asm
 
 build/m13_platform.obj: kernel/m13_platform.asm
 	-mkdir -p build bin
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) $(NASMFLAGS) -o $@ kernel/m13_platform.asm
 
 build/loader_services.obj: kernel/loader_services.asm boot/loader_abi.inc boot/disk_read.inc boot/loader_handoff.inc boot/mz_validate.inc boot/mz_transform.inc
 	-mkdir -p build bin
@@ -195,9 +195,9 @@ build/KVA8616.exe: $(OBJECTS) build/platform.lib config/m13-link.rsp
 
 bin/KERNEL.SYS: build/KVA8616.exe
 	-mkdir -p bin
-	cp $< $@
+	cp build/KVA8616.exe $@
 
 build/KVA8616.map: build/KVA8616.exe
 
-clean: .SYMBOLIC
+clean:
 	-rm -rf build bin
