@@ -32,7 +32,7 @@ segment _TEXT class=CODE public use16
 global PC88VA_MEMORY_KB
 PC88VA_MEMORY_KB:
         mov ax, 640
-        ret
+        retf
 
 ; DOS clock hooks use the accepted M10 monotonic service boundary.  The
 ; deterministic public build starts at zero; no RTC or I/O port is touched.
