@@ -136,9 +136,10 @@ kernel_start:
                 ; an IBM-PC INT 12h/BDA path.  The PC-88VA memory adapter has
                 ; already reserved the resident callback and stack area.
                 cli
-                mov     ax,I_GROUP
-                mov     ss,ax
-                mov     sp,init_tos
+                ; The MZ handoff has installed the validated resident stack
+                ; (SS:SP at the exact image stack top).  Keep it intact so
+                ; the M10 stack-arena contract can account for the caller
+                ; frame without moving into I_GROUP's discardable data.
                 mov     ax,cs
                 mov     ds,ax
                 mov     es,ax
