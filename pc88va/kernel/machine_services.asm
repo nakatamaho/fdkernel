@@ -175,6 +175,9 @@ m10_init_bad:
 ; segment.  The implementation itself remains a near, register-preserving
 ; service for all resident callers.
 pc88va_machine_init_far_:
+        mov ax, cs
+        mov ds, ax
+        mov es, ax
         call pc88va_machine_init_
         retf
 
