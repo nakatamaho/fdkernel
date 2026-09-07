@@ -1418,7 +1418,9 @@ void ReadAllPartitionTables(void)
   }
 }
 #endif
+#if defined(PC88VA)
 }
+#endif
 
 /* disk initialization: returns number of units */
 COUNT dsk_init()

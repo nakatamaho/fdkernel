@@ -850,4 +850,6 @@ STATIC void CheckContinueBootFromHarddisk(void)
   }
 }
 #endif
+#if defined(PC88VA)
 }
+#endif
