@@ -40,7 +40,7 @@ file build/prf.obj
 file build/iprf.obj
 file build/dyninit.obj
 file build/inithma.obj
-file build/nls_default.obj
+file build/nls_hc.obj
 file build/strings.obj
 file build/syspack.obj
 file build/systime.obj
