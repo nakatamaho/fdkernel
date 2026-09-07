@@ -134,24 +134,30 @@ m13_unpack_run:
     call m13_consume_flag
     call m13_next_byte
     jc .fail
-    mov dl, al
+    mov [cs:m13_token_lo], al
     call m13_next_byte
     jc .fail
-    mov dh, al
-    mov ax, dx
+    mov [cs:m13_token_hi], al
+    xor ax, ax
+    mov al, [cs:m13_token_lo]
+    mov dx, ax
+    xor ax, ax
+    mov al, [cs:m13_token_hi]
+    mov ah, al
     and ah, 0xf0
     mov cl, 4
     shr ah, cl
+    mov al, dl
     inc ax
-    mov si, ax
-    mov al, dh
+    mov dx, ax
+    xor ax, ax
+    mov al, [cs:m13_token_hi]
     and al, 0x0f
     xor ah, ah
     add ax, 3
     mov [cs:m13_match_length], ax
     ; The token stores a backwards distance.  Convert it to the current
     ; ring index before emitting an overlapping match.
-    mov dx, si
     mov ax, bp
     sub ax, dx
     and ax, M13_RING_BYTES - 1
@@ -294,6 +300,8 @@ m13_remaining_hi:   dw 0
 m13_dest_segment:   dw 0
 m13_match_offset:   dw 0
 m13_match_length:   dw 0
+m13_token_lo:       db 0
+m13_token_hi:       db 0
 m13_flags:          db 0
 m13_flag_bits:      db 0
 m13_unpack_end:
