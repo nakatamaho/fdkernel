@@ -34,16 +34,6 @@ file build/memmgr.obj
 file build/misc.obj
 file build/lfnapi.obj
 file build/newstuff.obj
-file build/network.obj
-file build/nls.obj
-file build/prf.obj
-file build/iprf.obj
-file build/dyninit.obj
-file build/inithma.obj
-file build/nls_hc.obj
-file build/strings.obj
-file build/syspack.obj
-file build/systime.obj
 file build/task.obj
 file build/main.obj
 file build/config.obj
