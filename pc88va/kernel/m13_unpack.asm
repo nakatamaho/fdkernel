@@ -143,18 +143,19 @@ m13_unpack_run:
     mov cl, 4
     shr ah, cl
     inc ax
-    ; The token stores a backwards distance.  Convert it to the current
-    ; ring index before emitting an overlapping match.
-    mov dx, ax
-    mov ax, bp
-    sub ax, dx
-    and ax, M13_RING_BYTES - 1
-    mov [cs:m13_match_offset], ax
+    mov si, ax
     mov al, dh
     and al, 0x0f
     xor ah, ah
     add ax, 3
     mov [cs:m13_match_length], ax
+    ; The token stores a backwards distance.  Convert it to the current
+    ; ring index before emitting an overlapping match.
+    mov dx, si
+    mov ax, bp
+    sub ax, dx
+    and ax, M13_RING_BYTES - 1
+    mov [cs:m13_match_offset], ax
 .match_byte:
     cmp word [cs:m13_match_length], 0
     je .token
