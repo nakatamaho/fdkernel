@@ -82,7 +82,11 @@ VOID ASMCFUNC FreeDOSmain(void)
 #endif
 
   /* clear the Init BSS area (what normally the RTL does */
-  memset(_ib_start, 0, _ib_end - _ib_start);
+  /* PC-88VA's resident link places no initialization BSS in this image.
+     Keep the common clear for non-empty builds, but avoid entering the
+     model-specific RTL helper for the empty range. */
+  if (_ib_start != _ib_end)
+    memset(_ib_start, 0, _ib_end - _ib_start);
 
                         /*  if the kernel has been UPX'ed,
                                 CONFIG info is stored at 50:e2 ..fc
