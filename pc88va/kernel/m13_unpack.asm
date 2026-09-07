@@ -51,7 +51,10 @@ org 0
 %error M13_ORIG_IP is required
 %endif
 
-%define M13_RING_OFFSET 60000
+; Keep the source plus relocation records below the history window.  The
+; largest accepted carrier data extent is 65,520 bytes, so placing the ring
+; at the final 4 KiB leaves its input bytes intact without segment wrap.
+%define M13_RING_OFFSET 61440
 %define M13_RING_BYTES 4096
 
 ; The bootstrap runs at the transformed allocation base.  It moves this
