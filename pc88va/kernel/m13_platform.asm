@@ -8,7 +8,7 @@ cpu 8086
 
 %include "../kernel/segs.inc"
 %include "../hdr/stacks.inc"
-%include "../boot/loader_abi.inc"
+%include "boot/loader_abi.inc"
 
 %ifndef PC88VA
 %error PC88VA selector is required
