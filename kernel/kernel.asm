@@ -152,7 +152,9 @@ kernel_start:
                 push    ds
                 pop     es
                 cld
-                jmp     _FreeDOSmain
+                ; INIT_TEXT lives in HMA_TEXT while FreeDOSmain is resident
+                ; _TEXT; make the cross-segment handoff explicit.
+                jmp     far _FreeDOSmain
 kernel_platform_halt:
                 cli
                 hlt
