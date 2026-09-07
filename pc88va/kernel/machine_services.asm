@@ -17,7 +17,8 @@ segment _TEXT class=CODE public use16
 extern pc88va_console_putc_
 %endif
 
-global pc88va_machine_init_, pc88va_memory_query_, pc88va_interrupts_init_
+global pc88va_machine_init_, pc88va_machine_init_far_
+global pc88va_memory_query_, pc88va_interrupts_init_
 global pc88va_clock_read_, pc88va_fatal_stop_request_
 global pc88va_m10_memory_record_, pc88va_m10_clock_record_
 global pc88va_m10_state_, pc88va_m10_control_
@@ -168,6 +169,14 @@ m10_init_failed:
 m10_init_bad:
         mov ax, -1
         LEAVE
+
+; INIT_TEXT invokes this far trampoline so the service's CS-relative state
+; resolves in the resident _TEXT segment rather than the transient startup
+; segment.  The implementation itself remains a near, register-preserving
+; service for all resident callers.
+pc88va_machine_init_far_:
+        call pc88va_machine_init_
+        retf
 
 pc88va_memory_query_:
         ENTER

@@ -144,8 +144,8 @@ kernel_start:
                 mov     ds,ax
                 mov     es,ax
                 cld
-                extern  pc88va_machine_init_
-                call    pc88va_machine_init_
+                extern  pc88va_machine_init_far_
+                call    far pc88va_machine_init_far_
                 or      ax,ax
                 jnz     kernel_platform_halt
                 mov     ds,[cs:_INIT_DGROUP]
