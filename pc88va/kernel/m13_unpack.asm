@@ -215,9 +215,11 @@ m13_unpack_run:
     mov ds, ax
     mov es, ax
     mov dx, [cs:m13_saved_dx]
-    mov ax, M13_LOAD_SEG + M13_ORIG_CS
+    ; Cross a resident trampoline to flush the CPU fetch stream after the
+    ; expanded image has replaced the carrier bytes.
+    mov ax, M13_FILE_SEG
     push ax
-    mov ax, M13_ORIG_IP
+    mov ax, m13_flush_code
     push ax
     retf
 
@@ -225,6 +227,14 @@ m13_unpack_run:
     cli
     hlt
     jmp .fail
+
+m13_flush_code:
+    times 16 nop
+    mov ax, M13_LOAD_SEG + M13_ORIG_CS
+    push ax
+    mov ax, M13_ORIG_IP
+    push ax
+    retf
 
 ; Load the next flag bit.  Carry means that the bounded source is exhausted.
 m13_next_flag:
