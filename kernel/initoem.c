@@ -42,7 +42,7 @@ static BYTE *RcsId =
 
 /* PC-88VA has no IBM-PC BDA or INT 12h memory-size contract.  The resident
    machine adapter supplies a bounded conventional-memory value instead. */
-extern unsigned ASMPASCAL pc88va_memory_kb(void);
+extern unsigned FAR ASMPASCAL pc88va_memory_kb(void);
 
 unsigned init_oem(void)
 {
