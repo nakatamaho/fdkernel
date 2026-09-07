@@ -122,6 +122,7 @@ m13_unpack_run:
     jc .fail
     test byte [cs:m13_flags], 1
     jnz .match
+    call m13_consume_flag
 
     call m13_next_byte
     jc .fail
@@ -130,6 +131,7 @@ m13_unpack_run:
     jmp .token
 
 .match:
+    call m13_consume_flag
     call m13_next_byte
     jc .fail
     mov bl, al
@@ -142,6 +144,12 @@ m13_unpack_run:
     shr ah, cl
     mov al, bl
     inc ax
+    ; The token stores a backwards distance.  Convert it to the current
+    ; ring index before emitting an overlapping match.
+    mov dx, ax
+    mov ax, bp
+    sub ax, dx
+    and ax, M13_RING_BYTES - 1
     mov [cs:m13_match_offset], ax
     mov al, bh
     and al, 0x0f
@@ -213,7 +221,7 @@ m13_unpack_run:
 ; Load the next flag bit.  Carry means that the bounded source is exhausted.
 m13_next_flag:
     cmp byte [cs:m13_flag_bits], 0
-    jne .shift
+    jne .ready
     cmp word [cs:m13_source], M13_PAYLOAD_SIZE
     jae .bad
     mov bx, [cs:m13_source]
@@ -221,13 +229,16 @@ m13_next_flag:
     mov [cs:m13_flags], al
     inc word [cs:m13_source]
     mov byte [cs:m13_flag_bits], 8
-.shift:
-    shr byte [cs:m13_flags], 1
-    dec byte [cs:m13_flag_bits]
+.ready:
     clc
     ret
 .bad:
     stc
+    ret
+
+m13_consume_flag:
+    shr byte [cs:m13_flags], 1
+    dec byte [cs:m13_flag_bits]
     ret
 
 ; Return one bounded source byte in AL, with carry on exhaustion.
