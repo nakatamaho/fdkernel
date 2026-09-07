@@ -804,6 +804,14 @@ VOID DoConfig(int nPass)
   BYTE *pLine;
   BOOL bEof = FALSE;
 
+#if defined(PC88VA)
+  /* The M13 synthetic session deliberately carries no CONFIG.SYS.  The
+     PC-88VA adapter has no BIOS configuration prompt or config-file policy;
+     leave the common defaults intact and continue to the resident shell. */
+  (void)nPass;
+  return;
+#endif
+
 #ifdef MEMDISK_ARGS
   /* check if MEMDISK used for LoL->BootDrive, if so check for special appended arguments */
   struct memdiskinfo FAR *mdsk = NULL;
