@@ -35,6 +35,9 @@ extern _IOExit, _IODone, _IOErrorExit, _IOCommandError, _ReqPktPtr
 extern pc88va_console_getc_
 extern pc88va_m11_character_
 
+global _kbdType
+_kbdType:        db 0
+
 ; Bridge the common device-driver call (DS = DOS data) to the M11 ABI (DS = CS).
 global pc88va_dos_getc_
 pc88va_dos_getc_:
@@ -103,6 +106,18 @@ ConWriteLoop:
 ConWriteReady:
                 loop ConWriteLoop
                 jmp _IOExit
+
+; Common initialization installs INT 29h for compact kernel diagnostics.
+; Route it through the accepted PC-88VA console service, never BIOS INT 10h.
+global _int29_handler
+_int29_handler:
+                push ax
+                pushf
+                xor ah, ah
+                call pc88va_console_putc_
+                popf
+                pop ax
+                iret
 %else
 segment _TEXT class=CODE public use16
 %endif

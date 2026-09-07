@@ -44,6 +44,7 @@ STACK_SIZE      equ     384/2           ; stack allocated in words
 ;************************************************************       
 
 %ifidn __OUTPUT_FORMAT__, obj
+global ..start
 ..start:
 %endif
 entry:  
