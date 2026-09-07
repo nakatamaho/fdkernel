@@ -1418,7 +1418,6 @@ void ReadAllPartitionTables(void)
   }
 }
 #endif
-}
 
 /* disk initialization: returns number of units */
 COUNT dsk_init()

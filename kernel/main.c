@@ -850,4 +850,3 @@ STATIC void CheckContinueBootFromHarddisk(void)
   }
 }
 #endif
-}
