@@ -162,7 +162,10 @@ m13_unpack_run:
     cmp word [cs:m13_remaining_hi], 0
     jne .match_output_ok
     cmp word [cs:m13_remaining_lo], 0
-    je .fail
+    ; A final LZSS match may be longer than the exact body tail.  The
+    ; bounded MZ output length is authoritative; stop at it and validate the
+    ; relocations rather than rejecting an otherwise complete body.
+    je .complete
 .match_output_ok:
     mov bx, [cs:m13_match_offset]
     add bx, M13_RING_OFFSET
