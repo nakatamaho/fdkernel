@@ -57,6 +57,15 @@ org 0
 %define M13_RING_OFFSET 61440
 %define M13_RING_BYTES 4096
 
+; The complete common-core link grows the code/data interval by 0x1016
+; paragraphs before its 4 KiB stack segment.  M10 deliberately rejects a
+; stack more than 0x1000 paragraphs above resident code.  Keep the exact
+; linked stack size and downward-growing ownership, but place its segment at
+; the next 0x20-paragraph boundary below the linked origin.  The loader
+; stack allocation still contains the whole interval and no M10 predicate
+; is weakened.
+%define M13_STACK_BIAS 32
+
 ; The bootstrap runs at the transformed allocation base.  It moves this
 ; bridge to the immutable kernel-file segment before any output is written.
 m13_unpack_start:
@@ -208,7 +217,7 @@ m13_unpack_run:
 .relocated:
     mov ax, M13_LOAD_SEG
     mov es, ax
-    mov ax, M13_LOAD_SEG + M13_ORIG_SS
+    mov ax, M13_LOAD_SEG + M13_ORIG_SS - M13_STACK_BIAS
     mov ss, ax
     mov sp, M13_ORIG_SP
     mov ax, M13_LOAD_SEG
