@@ -7,7 +7,7 @@ LINKER=wlink
 PYTHON=python3
 
 CFLAGS=-zq -0 -ms -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DMAX_SEC_SIZE=4096 -DBIG_SECTOR=1 -I=../hdr -I=../kernel -I=kernel
-NASMFLAGS=-f obj -DPC88VA -DXCPU=86 -i../hdr/ -i../kernel/ -ipc88va/boot/
+NASMFLAGS=-f obj -DPC88VA -DXCPU=86 -i../hdr/ -i../kernel/ -iboot/
 
 COMMON_ASM=kernel entry io serial printer asmsupt execrh nlssupt procsupt dosidle int2f apisupt intr irqstack memdisk cpu
 COMMON_C=blockio break chario dosfns dsk error fatdir fatfs fattab fcbfns inthndlr ioctl memmgr misc lfnapi newstuff network nls prf strings syspack systime task main config initoem initdisk initclk sysclk
