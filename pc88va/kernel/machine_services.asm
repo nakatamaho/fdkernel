@@ -175,10 +175,18 @@ m10_init_bad:
 ; segment.  The implementation itself remains a near, register-preserving
 ; service for all resident callers.
 pc88va_machine_init_far_:
+        ; Remove the far-return frame while entering the near service.  The
+        ; stack-arena contract measures the caller SP immediately before its
+        ; near call; restoring the frame after the service preserves that
+        ; exact measurement and returns to INIT_TEXT normally.
+        pop bx
+        pop dx
         mov ax, cs
         mov ds, ax
         mov es, ax
         call pc88va_machine_init_
+        push dx
+        push bx
         retf
 
 pc88va_memory_query_:
