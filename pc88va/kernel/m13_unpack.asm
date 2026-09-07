@@ -178,10 +178,6 @@ m13_unpack_run:
 .match_output_ok:
     mov bx, [cs:m13_match_offset]
     add bx, M13_RING_OFFSET
-    cmp bx, M13_RING_OFFSET + M13_RING_BYTES
-    jb .ring_address
-    sub bx, M13_RING_BYTES
-.ring_address:
     mov al, [ds:bx]
     call m13_emit
     jc .fail
