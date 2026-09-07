@@ -37,6 +37,10 @@ file build/newstuff.obj
 file build/network.obj
 file build/nls.obj
 file build/prf.obj
+file build/iprf.obj
+file build/dyninit.obj
+file build/inithma.obj
+file build/nls_default.obj
 file build/strings.obj
 file build/syspack.obj
 file build/systime.obj
@@ -54,6 +58,7 @@ file build/loader_services.obj
 file build/machine_services.obj
 file build/console_input.obj
 file build/resident_disk.obj
+file build/stubs.obj
 library ../lib/device.lib
 library ../lib/libm.lib
 name build/KVA8616.exe
