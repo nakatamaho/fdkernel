@@ -65,12 +65,24 @@ static BYTE *RcsId =
            + 1 byte: '\0'
            -- 1999/04/21 ska */
 
+#if defined(PC88VA)
+/* Keep the initial PC-88VA IVT transaction quiescent until every vector is
+   installed.  The normal DOS vector helpers still restore interrupts for
+   all calls outside that bounded startup window. */
+unsigned char pc88va_vectors_atomic;
+#endif
+
 intvec getvec(unsigned char intno)
 {
   intvec iv;
   disable();
   iv = *(intvec FAR *)MK_FP(0,4 * (intno));
+#if defined(PC88VA)
+  if (!pc88va_vectors_atomic)
+    enable();
+#else
   enable();
+#endif
   return iv;
 }
 
@@ -78,7 +90,12 @@ void setvec(unsigned char intno, intvec vector)
 {
   disable();
   *(intvec FAR *)MK_FP(0,4 * intno) = vector;
+#if defined(PC88VA)
+  if (!pc88va_vectors_atomic)
+    enable();
+#else
   enable();
+#endif
 }
 
 ULONG SftGetFsize(int sft_idx)

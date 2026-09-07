@@ -251,6 +251,11 @@ void setvec(unsigned char intno, intvec vector)
 
 STATIC void setup_int_vectors(void)
 {
+#if defined(PC88VA)
+  extern unsigned char pc88va_vectors_atomic;
+  pc88va_vectors_atomic = 1;
+  disable();
+#endif
   static struct vec
   {
     unsigned char intno;
@@ -291,6 +296,10 @@ STATIC void setup_int_vectors(void)
   /* these two are in the device driver area LOWTEXT (0x70) */
   setvec(0x1b, got_cbreak);
   setvec(0x29, int29_handler);  /* required for printf! */
+#if defined(PC88VA)
+  pc88va_vectors_atomic = 0;
+  enable();
+#endif
 }
 
 STATIC void init_kernel(void)
