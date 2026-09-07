@@ -134,11 +134,11 @@ m13_unpack_run:
     call m13_consume_flag
     call m13_next_byte
     jc .fail
-    mov bl, al
+    mov dl, al
     call m13_next_byte
     jc .fail
-    mov bh, al
-    mov ax, bx
+    mov dh, al
+    mov ax, dx
     and ah, 0xf0
     mov cl, 4
     shr ah, cl
