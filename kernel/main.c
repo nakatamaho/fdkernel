@@ -253,8 +253,6 @@ STATIC void setup_int_vectors(void)
 {
 #if defined(PC88VA)
   extern unsigned char pc88va_vectors_atomic;
-  pc88va_vectors_atomic = 1;
-  disable();
 #endif
   static struct vec
   {
@@ -282,6 +280,11 @@ STATIC void setup_int_vectors(void)
   struct vec *pvec;
   struct lowvec FAR *plvec;
   int i;
+
+#if defined(PC88VA)
+  pc88va_vectors_atomic = 1;
+  disable();
+#endif
 
   for (plvec = intvec_table; plvec < intvec_table + 5; plvec++)
     plvec->isv = getvec(plvec->intno);
