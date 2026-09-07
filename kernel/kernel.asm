@@ -143,6 +143,7 @@ kernel_start:
                 mov     ax,cs
                 mov     ds,ax
                 mov     es,ax
+                cld
                 extern  pc88va_machine_init_
                 call    pc88va_machine_init_
                 or      ax,ax
