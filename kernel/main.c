@@ -85,7 +85,15 @@ VOID ASMCFUNC FreeDOSmain(void)
   /* PC-88VA's resident link places no initialization BSS in this image.
      Keep the common clear for non-empty builds, but avoid entering the
      model-specific RTL helper for the empty range. */
+  /* The PC-88VA large-model runtime emits a broken hidden __PTC far-pointer
+     comparison (it leaves an extra word on the stack before its retf).  The
+     linker keeps the init-BSS symbols in one segment, so compare their
+     offsets and retain the normal clear without entering that helper. */
+#if defined(PC88VA)
+  if (FP_OFF(_ib_start) != FP_OFF(_ib_end))
+#else
   if (_ib_start != _ib_end)
+#endif
     memset(_ib_start, 0, _ib_end - _ib_start);
 
                         /*  if the kernel has been UPX'ed,
