@@ -628,11 +628,11 @@ BOOL init_device(struct dhdr FAR * dhp, char *cmdLine, COUNT mode,
   rq.r_bpbptr = (void FAR *)(cmdLine ? cmdLine : "\n");
   rq.r_firstunit = LoL->nblkdev;
 
-#if defined(GUARD_MEMORY_ON_INIT)
+#if defined(GUARD_MEMORY_ON_INIT) && !defined(PC88VA)
   guard_mcb(0, GUARD_ID);
 #endif
   execrh((request FAR *) & rq, dhp);
-#if defined(GUARD_MEMORY_ON_INIT)
+#if defined(GUARD_MEMORY_ON_INIT) && !defined(PC88VA)
   guard_mcb(GUARD_ID, 0);
 #endif
 
