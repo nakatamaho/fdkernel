@@ -9,7 +9,9 @@ PYTHON=python3
 # The common DOS core uses the large model: both code and data pointers are
 # far, matching the resident runtime helpers and keeping calls valid after
 # the M13 MZ expansion.
-CFLAGS=-zq -0 -ml -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DMAX_SEC_SIZE=4096 -DBIG_SECTOR=1 -I=../hdr -I=../kernel -I=kernel
+# The common core needs far calls but keeps its DOS data in DGROUP, matching
+# the resident DS contract established by the PC-88VA startup.
+CFLAGS=-zq -0 -mm -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DMAX_SEC_SIZE=4096 -DBIG_SECTOR=1 -I=../hdr -I=../kernel -I=kernel
 NASMFLAGS=-f obj -DPC88VA -DWATCOM -DXCPU=86 -i../hdr/ -i../kernel/ -iboot/
 
 COMMON_ASM=kernel entry io serial printer asmsupt execrh nlssupt procsupt dosidle int2f apisupt intr irqstack memdisk cpu
