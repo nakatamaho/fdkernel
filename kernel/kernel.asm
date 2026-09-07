@@ -151,6 +151,11 @@ kernel_start:
                 mov     ds,[cs:_INIT_DGROUP]
                 push    ds
                 pop     es
+                ; Watcom C entry points use BP as the caller stack frame.
+                ; The resident MZ handoff already established SS:SP, so
+                ; mirror the common `cont` setup without changing ownership
+                ; of that validated stack arena.
+                mov     bp,sp
                 cld
                 ; INIT_TEXT lives in HMA_TEXT while FreeDOSmain is resident
                 ; _TEXT; make the cross-segment handoff explicit.
