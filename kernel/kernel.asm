@@ -47,6 +47,7 @@ STACK_SIZE      equ     384/2           ; stack allocated in words
 global ..start
 ..start:
 %endif
+global entry
 entry:  
                 jmp short realentry
 

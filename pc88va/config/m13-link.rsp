@@ -2,7 +2,7 @@ option map=build/KVA8616.map
 option statics
 option verbose
 format dos
-option start=..start
+option start=entry
 file build/kernel.obj
 file build/entry.obj
 file build/io.obj
