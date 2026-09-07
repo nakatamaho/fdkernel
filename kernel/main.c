@@ -107,7 +107,18 @@ VOID ASMCFUNC FreeDOSmain(void)
   /* The PC-88VA loader carries the boot drive in the resident handoff.  The
      IBM-PC UPX scratch/BDA location is not part of this platform contract. */
   drv = 1;
-  fmemcpy(&InitKernelConfig, &LowKernelConfig, sizeof(InitKernelConfig));
+  /* The common library's far-copy entry is linked with the large-model
+     stack/DGROUP convention.  The M13 medium-model build keeps DOS data in
+     DS, so that entry would interpret the caller's frame in the wrong order
+     and never return.  Copy the small fixed configuration directly while
+     retaining the declared far source at physical 0000:0002. */
+  {
+    BYTE FAR *source = (BYTE FAR *)MK_FP(0, 2);
+    BYTE *destination = (BYTE *)&InitKernelConfig;
+    unsigned int index;
+    for (index = 0; index < sizeof(InitKernelConfig); ++index)
+      destination[index] = source[index];
+  }
 #else
   p = MK_FP(0, 0x5e0);
   if (fmemcmp(p+2,"CONFIG",6) == 0)      /* UPX */
