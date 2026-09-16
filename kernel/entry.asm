@@ -329,7 +329,7 @@ pc88va_int21_before_syscall_probe:
                 ; with its correct FAR call/return ABI.
                 call    far _pc88va_int21_syscall_bridge
 %else
-                call    far _int21_syscall
+                call    _int21_syscall
 %endif
                 pop     cx
                 pop     cx
