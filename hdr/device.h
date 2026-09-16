@@ -120,8 +120,16 @@ struct dhdr {
   /* Device headers store entry offsets, not far pointers.  Under the
    * medium model an unqualified function pointer is four bytes and shifts
    * dh_name away from the 18-byte assembly layout. */
-  VOID (NEAR *dh_strategy) (void);
-  VOID (NEAR *dh_interrupt) (void);
+#if defined(NEAR)
+#define DHDR_NEAR NEAR
+#else
+/* Linear/GCC builds have no NEAR keyword; their existing pointer model is
+ * retained outside the PC-88VA medium-model layout contract. */
+#define DHDR_NEAR
+#endif
+  VOID (DHDR_NEAR *dh_strategy) (void);
+  VOID (DHDR_NEAR *dh_interrupt) (void);
+#undef DHDR_NEAR
   UBYTE dh_name[8];
 };
 
