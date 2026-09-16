@@ -51,7 +51,13 @@ static BYTE *mcb_hRcsId =
 #define MCB_NORMAL      0x4d
 #define MCB_LAST        0x5a
 
-#if defined(NEC98)
+#if defined(PC88VA)
+/* PC-88VA reserves physical 0600h-0fffh for system use, and the
+   Text BIOS keeps callback state at physical 10b0h.  The initial
+   entry scratch remains at 0060:0000; place the DOS PSP after that
+   firmware state so PSP initialization cannot clear the callback. */
+#define DOS_PSP         0x0200
+#elif defined(NEC98)
 #define DOS_PSP         (0x0060 + 0x02d0)  /* see nec98/kernel/kernel.asm */
 #else
 #define DOS_PSP         0x0060  /* 0x0008 What? seg 8 =0:0080 */
@@ -70,4 +76,3 @@ typedef struct {
   BYTE m_fill[3];
   BYTE m_name[8];               /* owner name limited to 8 bytes        */
 } mcb;
-

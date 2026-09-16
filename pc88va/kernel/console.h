@@ -5,4 +5,7 @@
 /* M09 early output only; AX input/result under the Watcom register ABI. */
 int pc88va_console_putc(unsigned short character);
 
+/* FAR-call bridge for medium-model diagnostic C callers. */
+unsigned short pc88va_diag_putc(unsigned short character);
+
 #endif

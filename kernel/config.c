@@ -30,6 +30,9 @@
 #include "portab.h"
 #include "init-mod.h"
 #include "dyndata.h"
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+#include "../pc88va/kernel/m13_diag.h"
+#endif
 
 #ifdef VERSION_STRINGS
 static BYTE *RcsId =
@@ -148,6 +151,13 @@ struct config Config = {
 
 STATIC seg base_seg BSS_INIT(0);
 STATIC seg umb_base_seg BSS_INIT(0);
+#if defined(PC88VA)
+/* Upper edge of the pre-MCB arena while the startup buffers are live. */
+STATIC seg pc88va_mcb_top BSS_INIT(0);
+/* The relocated common text is a live, non-free MCB between two arenas. */
+STATIC seg pc88va_resident_mcb BSS_INIT(0);
+STATIC seg pc88va_suffix_mcb BSS_INIT(0);
+#endif
 BYTE FAR *lpTop BSS_INIT(0);
 STATIC unsigned nCfgLine BSS_INIT(0);
 COUNT UmbState BSS_INIT(0);
@@ -220,6 +230,11 @@ STATIC char toupper(char c);
 STATIC VOID strupr(char *s);
 STATIC VOID mcb_init(UCOUNT seg, UWORD size, BYTE type);
 STATIC VOID mumcb_init(UCOUNT seg, UWORD size);
+#if defined(PC88VA)
+STATIC seg pc88va_para_segment(BYTE FAR *p);
+STATIC VOID pc88va_init_mcb(seg segment, UWORD size, BYTE type,
+                            UWORD owner);
+#endif
 
 STATIC VOID Stacks(BYTE * pLine);
 STATIC VOID StacksHigh(BYTE * pLine);
@@ -381,6 +396,14 @@ void PreConfig(void)
 void PreConfig2(void)
 {
   struct sfttbl FAR *sp;
+#if defined(PC88VA)
+  seg arena_base;
+  seg arena_top;
+  seg arena_limit;
+  seg resident_start;
+  seg resident_end;
+  UWORD resident_paras;
+#endif
 
   /* initialize NEAR allocated things */
 
@@ -392,7 +415,50 @@ void PreConfig2(void)
      and allocation starts after the kernel.
    */
 
+#if defined(PC88VA)
+  /*
+   * The relocated kernel, startup stack, and temporary pre-MCB buffers are
+   * all live at this point.  The first MCB must begin above the complete
+   * loader-provided stack, not at _init_end (which precedes its upper edge).
+   */
+  arena_base = pc88va_para_segment((BYTE FAR *)_pc88va_stack_end);
+  resident_start = (seg)CurrentKernelSegment;
+  /* lpTop is deliberately kept in a non-canonical segment:offset form.
+   * CurrentKernelSegment is the paragraph where the copied text actually
+   * starts, so use it as the low-arena boundary rather than rounding lpTop's
+   * offset a second time. */
+  arena_top = resident_start;
+  arena_limit = (seg)(ram_top * 64U);
+  resident_paras = (UWORD)((HMAFree + 15UL) / 16UL);
+  resident_end = (seg)(resident_start + resident_paras);
+  if (arena_top <= arena_base + 1U ||
+      resident_start != arena_top ||
+      resident_paras == 0 ||
+      (resident_end + 1U) >= arena_limit ||
+      resident_start <= arena_base + 1U)
+    init_fatal("PC88VA resident arena");
+
+  base_seg = LoL->first_mcb = arena_base;
+  /*
+   * Keep the resident HMA text out of DOS allocations while exposing the
+   * ordinary RAM above it.  The low free block ends at the MCB immediately
+   * before the relocated text; a resident-owned MCB covers the text itself;
+   * the terminal free block then continues up to the RAM/TVRAM boundary.
+   */
+  pc88va_resident_mcb = (seg)(resident_start - 1U);
+  pc88va_suffix_mcb = resident_end;
+  pc88va_init_mcb(base_seg,
+                  (UWORD)(pc88va_resident_mcb - arena_base - 1U),
+                  MCB_NORMAL, FREE_PSP);
+  pc88va_init_mcb(pc88va_resident_mcb, resident_paras,
+                  MCB_NORMAL, 8);
+  pc88va_init_mcb(pc88va_suffix_mcb,
+                  (UWORD)(arena_limit - resident_end - 1U),
+                  MCB_LAST, FREE_PSP);
+  pc88va_mcb_top = arena_limit;
+#else
   base_seg = LoL->first_mcb = FP_SEG(AlignParagraph((BYTE FAR *) DynLast() + 0x0f));
+#endif
 
   if (Config.ebda2move)
   {
@@ -402,8 +468,10 @@ void PreConfig2(void)
     ram_top += ebda_size / 1024;
   }
 
+#if !defined(PC88VA)
   /* We expect ram_top as Kbytes, so convert to paragraphs */
   mcb_init(base_seg, ram_top * 64 - LoL->first_mcb - 1, MCB_LAST);
+#endif
 
   sp = LoL->sfthead;
   sp = sp->sftt_next = KernelAlloc(sizeof(sftheader) + 3 * sizeof(sft), 'F', 0);
@@ -423,6 +491,9 @@ void PreConfig2(void)
 void PostConfig(void)
 {
   sfttbl FAR *sp;
+#if defined(PC88VA)
+  seg arena_limit;
+#endif
 
   /* We could just have loaded FDXMS or HIMEM */
   if (HMAState == HMA_REQ && MoveKernelToHMA())
@@ -439,6 +510,35 @@ void PostConfig(void)
   LoL->lastdrive = Config.cfgLastdrive;
   if (LoL->lastdrive < LoL->nblkdev)
     LoL->lastdrive = LoL->nblkdev;
+
+#if defined(PC88VA)
+  /*
+   * Once PostConfig starts replacing the temporary pre-MCB buffers, extend
+   * the terminal MCB only to the active resident boundary.  Do not reclaim
+   * the buffers while their callers can still reference them.
+   */
+  arena_limit = (seg)(ram_top * 64U);
+  if (CurrentKernelSegment != 0 && CurrentKernelSegment != 0xffffU &&
+      CurrentKernelSegment > pc88va_mcb_top &&
+      CurrentKernelSegment < arena_limit)
+    arena_limit = (seg)CurrentKernelSegment;
+
+  if (arena_limit < pc88va_mcb_top)
+    init_fatal("PC88VA arena moved");
+  if (arena_limit > pc88va_mcb_top)
+  {
+    if (pc88va_suffix_mcb != 0)
+      para2far(pc88va_suffix_mcb)->m_size += arena_limit - pc88va_mcb_top;
+    else
+      para2far(base_seg)->m_size += arena_limit - pc88va_mcb_top;
+    pc88va_mcb_top = arena_limit;
+  }
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+  pc88va_m13_diag_arena(base_seg, pc88va_mcb_top,
+                        (unsigned short)CurrentKernelSegment,
+                        (unsigned short)ram_top);
+#endif
+#endif
 
   DebugPrintf(("starting FAR allocations at %x\n", base_seg));
 
@@ -1990,6 +2090,25 @@ STATIC void FAR * AlignParagraph(VOID FAR * lpPtr)
   /* boundary.                                                    */
   return MK_FP(uSegVal, 0);
 }
+#if defined(PC88VA)
+/* Return the paragraph containing the end of a segmented byte pointer. */
+STATIC seg pc88va_para_segment(BYTE FAR *p)
+{
+  return (seg)(FP_SEG(p) + ((ULONG)FP_OFF(p) + 15UL) / 16UL);
+}
+
+/* Initialize one PC-88VA MCB without inheriting mcb_init's static template. */
+STATIC VOID pc88va_init_mcb(seg segment, UWORD size, BYTE type, UWORD owner)
+{
+  mcb FAR *p = para2far(segment);
+
+  p->m_type = type;
+  p->m_psp = owner;
+  p->m_size = size;
+  fmemset(p->m_fill, 0, sizeof(p->m_fill));
+  fmemset(p->m_name, 0, sizeof(p->m_name));
+}
+#endif
 #endif
 
 STATIC int iswh(unsigned char c)
@@ -2132,6 +2251,9 @@ STATIC void config_init_buffers(int wantedbuffers)
   unsigned maxbuffers = 99;
   unsigned buffersize;
   UBYTE FAR *pbuffer;
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+  unsigned requestedbuffers = (unsigned)wantedbuffers;
+#endif
 #if BIG_SECTOR
   unsigned maxsecsize = LoL->maxsecsize;
 
@@ -2144,6 +2266,10 @@ STATIC void config_init_buffers(int wantedbuffers)
 #else
 
   buffersize = sizeof(struct buffer);
+#endif
+
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+  pc88va_m13_diag_stage(M13_DIAG_BUFFER_ALLOC_BEGIN);
 #endif
 
   /* fill HMA with buffers if BUFFERS count >=0 and DOS in HMA        */
@@ -2162,6 +2288,12 @@ STATIC void config_init_buffers(int wantedbuffers)
   }
   if (wantedbuffers > buffers)   /* more specified than available -> get em */
     buffers = wantedbuffers;
+
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+  pc88va_m13_diag_buffers((unsigned short)requestedbuffers,
+                          (unsigned short)maxbuffers,
+                          (unsigned short)buffers);
+#endif
 
   LoL->nbuffers = buffers;
   LoL->inforecptr = &LoL->firstbuf;
@@ -2209,6 +2341,10 @@ STATIC void config_init_buffers(int wantedbuffers)
      */
 
   DebugPrintf((" done\n"));
+
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+  pc88va_m13_diag_stage(M13_DIAG_BUFFER_CLEAR_DONE);
+#endif
 
   if (FP_SEG(pbuffer) == 0xffff)
   {

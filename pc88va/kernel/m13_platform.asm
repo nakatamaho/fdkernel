@@ -6,9 +6,24 @@
 bits 16
 cpu 8086
 
-%include "../kernel/segs.inc"
 %include "../hdr/stacks.inc"
 %include "boot/loader_abi.inc"
+
+; The common arg macro starts at BP+4 for a near return frame.  These
+; platform entry points are called FAR by the medium-model C caller, so their
+; first argument starts at BP+6 (the extra word is the return CS).
+%macro pc88va_arg_far 1-*
+        %assign .argloc 6
+        %rep %0
+                %ifdef PASCAL
+                        %rotate -1
+                %endif
+                        definearg %1
+                %ifdef STDCALL
+                        %rotate 1
+                %endif
+        %endrep
+%endmacro
 
 %ifndef PC88VA
 %error PC88VA selector is required
@@ -21,11 +36,34 @@ cpu 8086
 %endif
 
 extern pc88va_kernel_disk_read_
+extern pc88va_kernel_firmware_read_one_
 extern pc88va_m12_request_
 extern pc88va_m12_buffer_
 extern pc88va_m12_drive_context_
+extern _int21_service
 
 segment _TEXT class=CODE public use16
+
+; HMA_TEXT invokes the common INT 21 service through a FAR transfer after
+; relocation.  The Open Watcom medium-model C body is a FAR CDECL function.
+; Entry has the user register-frame words (BP then SS) below the synthetic
+; FAR return frame; rebuild that one far argument explicitly before calling
+; the C body and remove it after the CDECL return.  This keeps the outer
+; entry/IRET frame byte-for-byte intact.
+global _pc88va_int21_service_far
+global pc88va_int21_service_far_
+_pc88va_int21_service_far:
+pc88va_int21_service_far_:
+        push bp
+        mov bp, sp
+        ; wrapper entry: [bp+2] outer IP, [bp+4] outer CS,
+        ; [bp+6] user BP (pointer offset), [bp+8] user SS (segment).
+        push word [bp+8]
+        push word [bp+6]
+        call far _int21_service
+        add sp, 4
+        pop bp
+        retf
 
 ; Conventional-memory adapter value.  This is a bounded platform contract,
 ; not a claim that the host has a particular amount of RAM.
@@ -34,13 +72,86 @@ PC88VA_MEMORY_KB:
         mov ax, 640
         retf
 
-; DOS clock hooks use the accepted M10 monotonic service boundary.  The
-; deterministic public build starts at zero; no RTC or I/O port is touched.
+; DOS clock hooks use the PC-88VA calendar BIOS.  INT 8Ch/AH=02 returns the
+; current binary hour in CH, minute in CL, and second in DH.  The common
+; CLOCK$ code expects the IBM-compatible PIT tick count in DX:AX, so convert
+; seconds since midnight using the same 1,193,180-Hz scale as sysclk.c.
+; Keep the FAR medium-model ABI and preserve every register outside the
+; declared AX/CX/DX result set.
 global READPCCLOCK
 READPCCLOCK:
+        push bx
+        push si
+        push di
+        push bp
+        push ds
+        push es
+        mov ah, 02h
+        int 8ch
+
+        ; Form seconds since midnight in DX:AX.  The BIOS fields are binary.
+        xor bx, bx
+        mov bl, dh
+        mov si, bx
         xor dx, dx
         xor ax, ax
-        ret
+        mov al, ch
+        mov bl, 60
+        mul bl
+        xor bx, bx
+        mov bl, cl
+        add ax, bx
+        mov bx, 60
+        mul bx
+        add ax, si
+        adc dx, 0
+
+        ; 1,193,180 = 18*65,536 + 13,532.  Keep the 18*s term while
+        ; calculating floor(s*13,532/65,536) with 16-bit MUL operations.
+        mov si, ax
+        mov bx, dx
+        mov ax, si
+        mov dx, bx
+        shl ax, 1
+        rcl dx, 1
+        mov di, ax
+        mov bp, dx
+        shl ax, 1
+        rcl dx, 1
+        shl ax, 1
+        rcl dx, 1
+        shl ax, 1
+        rcl dx, 1
+        add ax, di
+        adc dx, bp
+        push dx
+        push ax
+
+        mov ax, si
+        mov cx, 13532
+        mul cx
+        mov di, dx
+        mov ax, bx
+        mul cx
+        add ax, di
+        adc dx, 0
+        pop cx
+        pop bx
+        add cx, ax
+        adc bx, dx
+        mov ax, cx
+        mov dx, bx
+
+        pop es
+        pop ds
+        pop bp
+        pop di
+        pop si
+        pop bx
+        ; Medium-model C callers enter through a synthetic FAR call
+        ; (push CS followed by a near call).  Consume both return words;
+        ; a near RET would leave the return segment on caller stack.
+        retf
 
 global WRITEPCCLOCK
 WRITEPCCLOCK:
@@ -83,7 +194,7 @@ FL_READ:
         push cx
         push dx
         push es
-        arg drive, head, track, sector, count, {buffer,4}
+        pc88va_arg_far drive, head, track, sector, count, {buffer,4}
         mov ax, [.drive]
         or ax, ax
         jnz .bad
@@ -105,6 +216,7 @@ FL_READ:
         ; lba = ((cylinder * 2 + head) * 8) + (sector - 1)
         shl dx, 1
         add dx, [.head]
+        shl dx, 1
         shl dx, 1
         shl dx, 1
         add dx, [.sector]
@@ -129,6 +241,11 @@ FL_READ:
         mov word [cs:pc88va_m12_request_+RD_SECTOR_BYTES], 1024
         mov ax, [cs:pc88va_m12_drive_context_]
         mov word [cs:pc88va_m12_request_+RD_DRIVE_CONTEXT], ax
+        ; The resident validator requires an explicit qualified far adapter.
+        ; Keep the callback binding in the request built for each DOS read;
+        ; a zero binding is a contract error, not a firmware result.
+        mov word [cs:pc88va_m12_request_+RD_ADAPTER_OFFSET], pc88va_kernel_firmware_read_one_
+        mov word [cs:pc88va_m12_request_+RD_ADAPTER_SEGMENT], cs
         mov word [cs:pc88va_m12_request_+RD_RETRIES], 3
         mov word [cs:pc88va_m12_request_+RD_COMPLETED], 0
         mov ax, pc88va_m12_request_
@@ -169,7 +286,7 @@ FL_READ:
         pop si
         pop ds
         pop bp
-        ret 14
+        retf 14
 
 ; Every mutating or unsupported low-level operation is rejected before any
 ; resident callback can run.  The common DOS layer maps this to its documented

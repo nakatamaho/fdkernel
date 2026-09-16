@@ -218,7 +218,11 @@ void FcbCloseAll(void);
 UBYTE FcbFindFirstNext(xfcb FAR * lpXfcb, BOOL First);
 
 /* intr.asm */
+#if defined(PC88VA)
+COUNT ASMPASCAL res_DosExec(COUNT mode, exec_blk FAR * ep, BYTE * lp);
+#else
 COUNT ASMPASCAL res_DosExec(COUNT mode, exec_blk * ep, BYTE * lp);
+#endif
 UCOUNT ASMPASCAL res_read(int fd, void *buf, UCOUNT count);
 #ifdef __WATCOMC__
 #pragma aux (pascal) res_DosExec modify exact [ax bx dx es]
@@ -403,4 +407,3 @@ VOID ASMCFUNC exec_user(iregs FAR * irp, int disable_a20);
 */
 
 #define ASSERT_CONST(x) { typedef struct { char _xx[x ? 1 : -1]; } xx ; }
-

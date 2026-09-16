@@ -13,6 +13,11 @@ cpu 8086
 %endif
 
 %ifndef M10_FLAT_TEST
+; Keep the resident machine-service segment close to the loader-owned stack
+; arena.  The M10 contract intentionally rejects a stack/code separation of
+; one megabyte or more; placing this code in the dedicated CODE segment keeps
+; the validated SS:CS relationship while the CON dispatch table remains in
+; LGROUP.
 segment _TEXT class=CODE public use16
 extern pc88va_console_putc_
 %endif
@@ -129,6 +134,10 @@ pc88va_m10_i5:
         or ax, ax
         jnz m10_init_failed
 pc88va_m10_i6:
+%ifdef M10_VISIBLE_DIAGNOSTICS
+        ; M10 verification text is diagnostic-only.  Keep the machine,
+        ; interrupt, clock, and arena checks active in the normal candidate,
+        ; but do not emit their private milestone banner on the console.
         mov si, m10_message
 m10_init_print:
         mov al, [cs:si]
@@ -140,6 +149,7 @@ m10_init_print:
         or ax, ax
         jnz m10_init_failed
         jmp short m10_init_print
+%endif
 pc88va_m10_i7:
         call m10_interrupts_compare
         or ax, ax
@@ -367,12 +377,14 @@ pc88va_m10_halt:
         hlt
         jmp short pc88va_m10_halt
 
+%ifdef M10_VISIBLE_DIAGNOSTICS
 m10_message: db 'M10 INIT OK',13,10,0
         db 'M10SERVICE:MACHINE_INIT:SINGLE_SHOT',0
         db 'M10SERVICE:MEMORY:OWNED_ARENA',0
         db 'M10SERVICE:INTERRUPTS:VALIDATED_ADOPTION',0
         db 'M10SERVICE:CLOCK:OBSERVED_VRTC_EDGE',0
         db 'M10SERVICE:FATAL_STOP:CLI_HLT',0
+%endif
 pc88va_m10_state_: db 0
 pc88va_m10_control_: db 0
 m10_interrupts_valid: db 0

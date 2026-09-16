@@ -140,9 +140,10 @@ kernel_start:
                 ; (SS:SP at the exact image stack top).  Keep it intact so
                 ; the M10 stack-arena contract can account for the caller
                 ; frame without moving into I_GROUP's discardable data.
-                mov     ax,cs
-                mov     ds,ax
-                mov     es,ax
+                push    cs
+                pop     ds
+                push    cs
+                pop     es
                 cld
                 extern  pc88va_machine_init_far_
                 call    far pc88va_machine_init_far_
@@ -938,11 +939,15 @@ _DGROUP_        dw DGROUP
 %ifdef WATCOM
 ;               32 bit multiplication + division
 global __U4M
+global __U4M_
 __U4M:
-                LMULU
+__U4M_:
+                LMULU 1
 global __U4D
+global __U4D_
 __U4D:
-                LDIVMODU
+__U4D_:
+                LDIVMODU 1
 %endif
 
 %ifdef gcc
@@ -983,6 +988,15 @@ __HMATextEnd:                   ; and c version
 ; stack here to ease debugging. -- ror4
 
 segment _STACK  class(STACK) nobits stack
+
+%ifdef PC88VA
+; Export the exclusive upper boundary of the complete startup stack.  The
+; PC-88VA loader restores SS to this segment, and the allocator must reserve
+; the full stack before creating the first MCB.
+global __pc88va_stack_end
+resb 1000h
+__pc88va_stack_end:
+%endif
 
 
 
@@ -1061,17 +1075,23 @@ _int19_handler: jmp 0:reloc_call_int19_handler
 _cpm_entry:     jmp 0:reloc_call_cpm_entry
                 call near forceEnableA20
 
+%ifndef PC88VA
                 global  _reloc_call_blk_driver
+                global  reloc_call_blk_driver_
                 extern  _blk_driver
+reloc_call_blk_driver_:
 _reloc_call_blk_driver:
                 jmp 0:_blk_driver
                 call near forceEnableA20
 
                 global  _reloc_call_clk_driver
+                global  reloc_call_clk_driver_
                 extern  _clk_driver
+reloc_call_clk_driver_:
 _reloc_call_clk_driver:
                 jmp 0:_clk_driver
                 call near forceEnableA20
+%endif
 
                 global  _CharMapSrvc ; in _DATA (see AARD)
                 extern  _reloc_call_CharMapSrvc
@@ -1086,6 +1106,22 @@ _init_call_p_0: jmp  0:reloc_call_p_0
 
    global __HMARelocationTableEnd
 __HMARelocationTableEnd:    
+
+%ifdef PC88VA
+                ; These C drivers remain resident; they are not HMA entries.
+                ; Bind both words through the linker, outside the moving table.
+                global _reloc_call_blk_driver, reloc_call_blk_driver_
+                extern _blk_driver
+reloc_call_blk_driver_:
+_reloc_call_blk_driver:
+                jmp seg _blk_driver:_blk_driver
+
+                global _reloc_call_clk_driver, reloc_call_clk_driver_
+                extern _clk_driver
+reloc_call_clk_driver_:
+_reloc_call_clk_driver:
+                jmp seg _clk_driver:_clk_driver
+%endif
 
 ;
 ; if we were lucky, we found all entries from the outside to the kernel.

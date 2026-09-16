@@ -51,6 +51,7 @@ file build/initoem.obj
 file build/initdisk.obj
 file build/initclk.obj
 file build/sysclk.obj
+file build/m13_diag.obj
 file build/memdisk.obj
 file build/cpu.obj
 file build/m13_platform.obj

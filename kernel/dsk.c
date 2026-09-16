@@ -392,7 +392,17 @@ STATIC WORD getbpb(ddt * pddt)
   {
     /* copy default bpb to be sure that there is no bogus data */
     memcpy(pbpbarray, &pddt->ddt_defbpb, sizeof(bpb));
+#if defined(PC88VA)
+    /*
+     * PC-88VA media uses the loader's 1024-byte layout and does not carry
+     * the DOS 0x55aa marker at 01feh.  The initialized default BPB is the
+     * authoritative geometry for this target, so report internal success;
+     * S_DONE is a request status, not getbpb()'s success value.
+     */
+    return 0;
+#else
     return S_DONE;
+#endif
   }
 
   pddt->ddt_descflags &= ~DF_NOACCESS;  /* set drive to accessible */

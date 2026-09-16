@@ -19,11 +19,14 @@ segment _TEXT class=CODE public use16
 extern pc88va_m10_state_
 extern pc88va_console_putc_
 %endif
-global pc88va_console_getc_, pc88va_m11_character_
+global pc88va_console_getc_, pc88va_console_getc_dos_
+global pc88va_console_peek_dos_, pc88va_console_read_dos_
+global pc88va_m11_character_
 global pc88va_m11_poll_matrix, pc88va_m11_return
 global pc88va_m11_storage_begin, pc88va_m11_storage_end
+global m11_pending_valid
 
-; AX=&exported word, DS=CS, M10 ready, IF=DF=TF=0.
+; AX=&exported word, DS=CS, M10 ready, IF=DF=TF=0 for the public raw entry.
 ; AX: 0 character, 1 no new input, 2 unsupported/ambiguous new input,
 ; ffff invalid precondition. Only status zero writes the character word.
 ; No queue: multiple non-modifier make edges in one poll are rejected.
@@ -41,6 +44,27 @@ pc88va_console_getc_:
         mov bp, sp
         test word [ss:bp+16], 0700h
         jnz m11_bad
+        jmp short m11_validate_common
+
+; The common DOS device dispatcher deliberately inherits IF=1 after INT 21h.
+; Keep the public raw entry strict, but expose an integration entry which
+; accepts that inherited IF while retaining the same non-reentrant poll and
+; preserving the caller's architectural flags.  No interrupt is installed or
+; suppressed here; this is only the established caller-contract boundary.
+pc88va_console_getc_dos_:
+        pushf
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        push bp
+        push ds
+        push es
+        mov bp, sp
+        test word [ss:bp+16], 0500h
+        jnz m11_bad
+m11_validate_common:
         cmp ax, pc88va_m11_character_
         jne m11_bad
         mov bx, ds
@@ -171,8 +195,39 @@ pc88va_m11_return:
         popf
         ret
 
+; DOS input-status callers must not consume a character merely by observing
+; it.  Keep one ready character latched until the corresponding C_INPUT read
+; consumes it.  The latch is deliberately one character deep: the existing
+; matrix contract rejects ambiguous simultaneous make edges, and a caller
+; must consume a reported character before another one is admitted.
+pc88va_console_peek_dos_:
+        cmp byte [cs:m11_pending_valid], 0
+        jne m11_peek_ready
+        call pc88va_console_getc_dos_
+        or ax, ax
+        jne m11_peek_return
+        mov byte [cs:m11_pending_valid], 1
+m11_peek_ready:
+        xor ax, ax
+m11_peek_return:
+        ret
+
+; C_INPUT is the consuming side of the same contract.  A character found by
+; an earlier non-destructive status request is returned without requiring a
+; new matrix edge; otherwise perform one ordinary poll.
+pc88va_console_read_dos_:
+        cmp byte [cs:m11_pending_valid], 0
+        je m11_read_poll
+        mov byte [cs:m11_pending_valid], 0
+        xor ax, ax
+        ret
+m11_read_poll:
+        call pc88va_console_getc_dos_
+        ret
+
 pc88va_m11_storage_begin:
 pc88va_m11_character_: dw 0
+m11_pending_valid: db 0
 m11_adopted: db 0
 m11_previous: times 15 db 0
 m11_current: times 15 db 0

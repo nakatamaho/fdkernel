@@ -38,6 +38,10 @@ org 0
 %ifndef M13_OUTPUT_SIZE
 %error M13_OUTPUT_SIZE is required
 %endif
+%ifndef M13_SOURCE_OFFSET
+%error M13_SOURCE_OFFSET is required
+%endif
+%define M13_SOURCE_END (M13_SOURCE_OFFSET + M13_PAYLOAD_SIZE)
 %ifndef M13_ORIG_SS
 %error M13_ORIG_SS is required
 %endif
@@ -52,9 +56,9 @@ org 0
 %endif
 
 ; Keep the source plus relocation records below the history window.  The
-; largest accepted carrier data extent is 65,520 bytes, so placing the ring
-; at the final 4 KiB leaves its input bytes intact without segment wrap.
-%define M13_RING_OFFSET 61440
+; largest accepted carrier data extent is 65,520 bytes.  The source begins
+; after the ring so all history writes remain inside the owned segment.
+%define M13_RING_OFFSET 0
 %define M13_RING_BYTES 4096
 
 ; The complete common-core link grows the code/data interval by 0x1016
@@ -99,7 +103,7 @@ m13_unpack_run:
     mov si, M13_PAYLOAD_OFFSET
     mov ax, M13_SCRATCH_SEG
     mov es, ax
-    xor di, di
+    mov di, M13_SOURCE_OFFSET
     mov cx, M13_DATA_SIZE
     rep movsb
 
@@ -114,8 +118,8 @@ m13_unpack_run:
     mov ax, M13_LOAD_SEG
     mov es, ax
     xor di, di
-    xor bp, bp
-    mov word [cs:m13_source], 0
+    xor si, si
+    mov word [cs:m13_source], M13_SOURCE_OFFSET
     mov ax, M13_OUTPUT_LO
     mov [cs:m13_remaining_lo], ax
     mov ax, M13_OUTPUT_HI
@@ -168,14 +172,15 @@ m13_unpack_run:
     xor ah, ah
     add ax, 3
     mov [cs:m13_match_length], ax
+    mov cx, ax
     ; The token stores a backwards distance.  Convert it to the current
     ; ring index before emitting an overlapping match.
-    mov ax, bp
+    mov ax, si
     sub ax, dx
     and ax, M13_RING_BYTES - 1
     mov [cs:m13_match_offset], ax
 .match_byte:
-    cmp word [cs:m13_match_length], 0
+    cmp cx, 0
     je .token
     cmp word [cs:m13_remaining_hi], 0
     jne .match_output_ok
@@ -195,8 +200,8 @@ m13_unpack_run:
     jb .match_next
     sub word [cs:m13_match_offset], M13_RING_BYTES
 .match_next:
-    dec word [cs:m13_match_length]
-    jmp .match_byte
+    loop .match_byte
+    jmp .token
 
 .complete:
     ; Apply the original MZ relocation words after the exact body has been
@@ -249,7 +254,7 @@ m13_flush_code:
 m13_next_flag:
     cmp byte [cs:m13_flag_bits], 0
     jne .ready
-    cmp word [cs:m13_source], M13_PAYLOAD_SIZE
+    cmp word [cs:m13_source], M13_SOURCE_END
     jae .bad
     mov bx, [cs:m13_source]
     mov al, [ds:bx]
@@ -264,13 +269,15 @@ m13_next_flag:
     ret
 
 m13_consume_flag:
-    shr byte [cs:m13_flags], 1
+    mov al, [cs:m13_flags]
+    shr al, 1
+    mov [cs:m13_flags], al
     dec byte [cs:m13_flag_bits]
     ret
 
 ; Return one bounded source byte in AL, with carry on exhaustion.
 m13_next_byte:
-    cmp word [cs:m13_source], M13_PAYLOAD_SIZE
+    cmp word [cs:m13_source], M13_SOURCE_END
     jae .bad
     mov bx, [cs:m13_source]
     mov al, [ds:bx]
@@ -298,9 +305,9 @@ m13_emit:
     mov es, ax
 .destination_ok:
     pop ax
-    mov [ds:bp+M13_RING_OFFSET], al
-    inc bp
-    and bp, M13_RING_BYTES - 1
+    mov [ds:si+M13_RING_OFFSET], al
+    inc si
+    and si, M13_RING_BYTES - 1
     sub word [cs:m13_remaining_lo], 1
     jnc .remaining_ok
     dec word [cs:m13_remaining_hi]

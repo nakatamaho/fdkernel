@@ -29,6 +29,10 @@
 #include "portab.h"
 #include "globals.h"
 
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+#include "../pc88va/kernel/m13_diag.h"
+#endif
+
 #ifdef VERSION_STRING
 static BYTE *memmgrRcsId =
     "$Id: memmgr.c 1338 2007-07-20 20:52:33Z mceric $";
@@ -115,6 +119,9 @@ COUNT DosMemAlloc(UWORD size, COUNT mode, seg *para, UWORD *asize)
   REG mcb FAR *p;
   mcb FAR *foundSeg;
   mcb FAR *biggestSeg;
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+  static unsigned char diag_mcb_dumped;
+#endif
   /* Initialize                                           */
 
 searchAgain:
@@ -202,6 +209,30 @@ searchAgain:
     }
     if (asize)
       *asize = biggestSeg ? biggestSeg->m_size : 0;
+#if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
+    if (size >= 0x0100U && size != 0xffffU)
+    {
+      pc88va_m13_diag_memalloc_failure(size, (unsigned short)mode,
+                                        biggestSeg ? biggestSeg->m_size : 0,
+                                        first_mcb, cu_psp);
+      if (!diag_mcb_dumped)
+      {
+        mcb FAR *diag_p = para2far(first_mcb);
+        unsigned short diag_index = 0;
+        while (diag_index < 8 && mcbValid(diag_p))
+        {
+          pc88va_m13_diag_mcb(diag_index, FP_SEG(diag_p),
+                              diag_p->m_type, diag_p->m_psp,
+                              diag_p->m_size);
+          ++diag_index;
+          if (diag_p->m_type == MCB_LAST)
+            break;
+          diag_p = nxtMCB(diag_p);
+        }
+        diag_mcb_dumped = 1;
+      }
+    }
+#endif
     return DE_NOMEM;
   }
 
@@ -492,4 +523,3 @@ void DosUmbLink(unsigned n)
 }
 
 #endif
-

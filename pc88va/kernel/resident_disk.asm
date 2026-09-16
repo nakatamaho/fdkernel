@@ -6,7 +6,6 @@
 ; this file supplies the resident entry and the accepted firmware callback.
 bits 16
 cpu 8086
-
 %ifndef PC88VA
 %error PC88VA selector is required
 %endif
@@ -53,7 +52,9 @@ pc88va_kernel_disk_read_:
         push ds
         push es
         mov bp, sp
-        test word [ss:bp+16], 0700h
+        ; DOS invokes the integration entry with IF inherited from INT 21h.
+        ; Keep DF/TF strict while preserving the caller's IF state.
+        test word [ss:bp+16], 0500h
         jnz .bad
         mov bx, ds
         mov dx, cs

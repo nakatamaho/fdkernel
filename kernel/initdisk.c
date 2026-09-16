@@ -31,6 +31,8 @@
 
 #if defined(PC88VA)
 #define FLOPPY_SEC_SIZE 1024u /* M12 PC-88VA logical sector */
+extern unsigned short pc88va_m13_before_dsk_print_probe(void);
+extern unsigned short pc88va_m13_after_dsk_print_probe(void);
 #else
 #define FLOPPY_SEC_SIZE 512u  /* common sector size */
 #endif
@@ -1292,7 +1294,11 @@ STATIC void make_ddt (ddt *pddt, int Unit, int driveno, int flags)
 void ReadAllPartitionTables(void)
 {
 #if defined(PC88VA)
-  ddt nddt;
+  /* The medium-model near-pointer ABI addresses data through DS.  The
+     initialization stack has a distinct SS, so a local ddt would be passed
+     as DS:BP-relative-offset and read from the wrong physical region.  Keep
+     this one-shot initialization record in DGROUP instead. */
+  static ddt nddt;
   memset(&nddt, 0, sizeof(nddt));
   make_ddt(&nddt, 0, 0, 0);
   nUnits = 1;
@@ -1425,7 +1431,13 @@ void ReadAllPartitionTables(void)
 /* disk initialization: returns number of units */
 COUNT dsk_init()
 {
+#if defined(PC88VA)
+  (void)pc88va_m13_before_dsk_print_probe();
+#endif
   printf(" - InitDisk");
+#if defined(PC88VA)
+  (void)pc88va_m13_after_dsk_print_probe();
+#endif
 
 #if defined(DEBUG) && !defined(DOSEMU)
   {

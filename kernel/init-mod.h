@@ -250,7 +250,14 @@ extern unsigned CurrentKernelSegment;
 extern struct _KernelConfig FAR ASM LowKernelConfig;
 extern WORD days[2][13];
 extern BYTE FAR *lpTop;
-extern BYTE ASM _ib_start[], ASM _ib_end[], ASM _init_end[];
+extern BYTE ASM _ib_start[], ASM _ib_end[];
+#if defined(PC88VA)
+/* _init_end is not the full startup-stack boundary on PC-88VA. */
+extern BYTE FAR ASM _init_end[];
+extern BYTE FAR ASM _pc88va_stack_end[];
+#else
+extern BYTE ASM _init_end[];
+#endif
 extern UWORD ram_top;               /* How much ram in Kbytes               */
 extern char singleStep;
 extern char SkipAllConfig;
@@ -344,4 +351,3 @@ ULONG ASMCFUNC FAR MULULUL(ULONG mul1, ULONG mul2);     /* MULtiply ULong by ULo
 ULONG ASMCFUNC FAR DIVULUS(ULONG mul1, UWORD mul2);     /* DIVide ULong by UShort */
 ULONG ASMCFUNC FAR DIVMODULUS(ULONG mul1, UWORD mul2, UWORD * rem);     /* DIVide ULong by UShort */
 #endif
-

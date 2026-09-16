@@ -6,19 +6,37 @@ NASM=nasm
 LINKER=wlink
 PYTHON=python3
 
-# The common DOS core uses the large model: both code and data pointers are
-# far, matching the resident runtime helpers and keeping calls valid after
-# the M13 MZ expansion.
-# The common core needs far calls but keeps its DOS data in DGROUP, matching
-# the resident DS contract established by the PC-88VA startup.
-CFLAGS=-zq -0 -mm -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DMAX_SEC_SIZE=4096 -DBIG_SECTOR=1 -I=../hdr -I=../kernel -I=kernel
-NASMFLAGS=-f obj -DPC88VA -DWATCOM -DXCPU=86 -i../hdr/ -i../kernel/ -iboot/
+# The common DOS core uses the medium model: normal function calls are FAR,
+# while ordinary data pointers remain NEAR. Interfaces that cross segments
+# (including fmemcpy's explicit FAR pointers) retain their declared FAR type.
+# The common core keeps its DOS data in DGROUP, matching the resident DS
+# contract established by the PC-88VA startup.
+# The M13 media contract uses 1024-byte sectors.  Keep the resident M12
+# scratch buffer at its independently defined 4096-byte capacity, but size
+# the DOS transfer/buffer arena to the media sector so COMMAND.COM can be
+# loaded without allocating over the resident-code boundary.
+M13_BASE_CFLAGS=-zq -0 -mm -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DMAX_SEC_SIZE=1024 -DBIG_SECTOR=1 -I=../hdr -I=../kernel -I=kernel
+M13_BASE_NASMFLAGS=-f obj -DPC88VA -DWATCOM -DXCPU=86 -i../hdr/ -i../kernel/ -iboot/
+# Visible M13 diagnostics are opt-in for private diagnosis.  The normal
+# candidate must not emit stage, allocator, EXEC, or input markers.
+M13_DIAG_FLAGS=
+M13_DIAG_NASM_FLAGS=
+M10_DIAG_NASM_FLAGS=
+!ifdef M13_VISIBLE_DIAGNOSTICS
+M13_DIAG_FLAGS=-DM13_VISIBLE_DIAGNOSTICS
+M13_DIAG_NASM_FLAGS=-DM13_VISIBLE_DIAGNOSTICS
+!endif
+!ifdef M10_VISIBLE_DIAGNOSTICS
+M10_DIAG_NASM_FLAGS=-DM10_VISIBLE_DIAGNOSTICS
+!endif
+CFLAGS=$(M13_BASE_CFLAGS) $(M13_DIAG_FLAGS)
+NASMFLAGS=$(M13_BASE_NASMFLAGS) $(M13_DIAG_NASM_FLAGS) $(M10_DIAG_NASM_FLAGS)
 
 COMMON_ASM=kernel entry io serial printer asmsupt execrh nlssupt procsupt dosidle int2f apisupt intr irqstack memdisk cpu
 COMMON_C=blockio break chario dosfns dsk error fatdir fatfs fattab fcbfns inthndlr ioctl memmgr misc lfnapi newstuff network nls prf strings syspack systime task main config initoem initdisk initclk sysclk
-OBJECTS=build/kernel.obj build/entry.obj build/io.obj build/serial.obj build/printer.obj build/asmsupt.obj build/execrh.obj build/nlssupt.obj build/procsupt.obj build/dosidle.obj build/int2f.obj build/apisupt.obj build/intr.obj build/irqstack.obj build/memdisk.obj build/cpu.obj build/blockio.obj build/break.obj build/chario.obj build/dosfns.obj build/dsk.obj build/error.obj build/fatdir.obj build/fatfs.obj build/fattab.obj build/fcbfns.obj build/inthndlr.obj build/ioctl.obj build/memmgr.obj build/misc.obj build/lfnapi.obj build/newstuff.obj build/network.obj build/nls.obj build/prf.obj build/iprf.obj build/dyninit.obj build/inithma.obj build/nls_hc.obj build/strings.obj build/syspack.obj build/systime.obj build/task.obj build/main.obj build/config.obj build/initoem.obj build/initdisk.obj build/initclk.obj build/sysclk.obj build/console_m13.obj build/m13_platform.obj build/loader_services.obj build/machine_services.obj build/console_input.obj build/resident_disk.obj build/stubs.obj
+OBJECTS=build/kernel.obj build/entry.obj build/io.obj build/serial.obj build/printer.obj build/asmsupt.obj build/execrh.obj build/nlssupt.obj build/procsupt.obj build/dosidle.obj build/int2f.obj build/apisupt.obj build/intr.obj build/irqstack.obj build/memdisk.obj build/cpu.obj build/blockio.obj build/break.obj build/chario.obj build/dosfns.obj build/dsk.obj build/error.obj build/fatdir.obj build/fatfs.obj build/fattab.obj build/fcbfns.obj build/inthndlr.obj build/ioctl.obj build/memmgr.obj build/misc.obj build/lfnapi.obj build/newstuff.obj build/network.obj build/nls.obj build/prf.obj build/iprf.obj build/dyninit.obj build/inithma.obj build/nls_hc.obj build/strings.obj build/syspack.obj build/systime.obj build/task.obj build/main.obj build/config.obj build/initoem.obj build/initdisk.obj build/initclk.obj build/sysclk.obj build/m13_diag.obj build/console_m13.obj build/m13_platform.obj build/loader_services.obj build/machine_services.obj build/console_input.obj build/resident_disk.obj build/stubs.obj
 
-all: bin/KERNEL.SYS build/KVA8616.map
+all: bin/KERNEL.SYS
 
 # wmake deliberately uses explicit rules here.  The pinned Open Watcom 1.9
 # wmake does not implement GNU make's foreach/eval extensions, and a silently
@@ -175,6 +193,10 @@ build/sysclk.obj: ../kernel/sysclk.c
 	-mkdir -p build bin
 	$(CC) $(CFLAGS) -fo=$@ ../kernel/sysclk.c
 
+build/m13_diag.obj: kernel/m13_diag.c kernel/m13_diag.h kernel/console.h
+	-mkdir -p build bin
+	$(CC) $(CFLAGS) -fo=$@ kernel/m13_diag.c
+
 build/console_m13.obj: kernel/console.asm
 	-mkdir -p build bin
 	$(NASM) $(NASMFLAGS) -o $@ kernel/console.asm
@@ -214,8 +236,6 @@ build/KVA8616.exe: $(OBJECTS) build/platform.lib config/m13-link.rsp
 bin/KERNEL.SYS: build/KVA8616.exe
 	-mkdir -p bin
 	cp build/KVA8616.exe $@
-
-build/KVA8616.map: build/KVA8616.exe
 
 clean:
 	-rm -rf build bin

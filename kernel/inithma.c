@@ -305,6 +305,44 @@ VOID FAR * HMAalloc(COUNT bytesToAllocate)
 
 unsigned CurrentKernelSegment = 0;
 
+#if defined(PC88VA)
+/*
+ * Open Watcom medium-model callers reach the HMA unsigned-long helpers with
+ * FAR CALLs.  The loader initially fixes their segment words to the linked
+ * HMA segment, while MoveKernel subsequently copies HMA_TEXT elsewhere.  The
+ * helper entry offsets are stable, so update only matching FAR CALL operands
+ * in the resident code segment rather than rewriting arbitrary data words.
+ */
+extern void FAR __U4M(void);
+extern void FAR __U4D(void);
+
+static void patch_hma_ulong_calls(unsigned old_segment, unsigned new_segment)
+{
+  BYTE FAR *code = (BYTE FAR *)MK_FP(FP_SEG(FreeDOSmain), 0);
+  unsigned u4m_offset = FP_OFF(__U4M);
+  unsigned u4d_offset = FP_OFF(__U4D);
+  unsigned i;
+
+  for (i = 0; i < 0xfffb; i++)
+  {
+    unsigned target_offset;
+    unsigned target_segment;
+
+    if (code[i] != 0x9a)       /* CALL FAR ptr16:16 */
+      continue;
+    target_offset = code[i + 1] | ((unsigned)code[i + 2] << 8);
+    target_segment = code[i + 3] | ((unsigned)code[i + 4] << 8);
+    if (target_segment != old_segment)
+      continue;
+    if (target_offset == u4m_offset || target_offset == u4d_offset)
+    {
+      code[i + 3] = (BYTE)new_segment;
+      code[i + 4] = (BYTE)(new_segment >> 8);
+    }
+  }
+}
+#endif
+
 void MoveKernel(unsigned NewKernelSegment)
 {
   UBYTE FAR *HMADest;
@@ -334,10 +372,19 @@ void MoveKernel(unsigned NewKernelSegment)
   HMAInitPrintf(("HMA moving %p up to %p for %04x bytes\n",
                  HMASource, HMADest, len));
 
+#if defined(PC88VA)
+  /* The PC-88VA startup does not execute the original kernel.asm initial
+     relocation.  Copy the first HMA image here as well as later downward
+     moves, so the old linked HMA interval can safely become DOS data. */
+  if (NewKernelSegment != CurrentKernelSegment)
+    fmemcpy(HMADest, HMASource, len);
+  patch_hma_ulong_calls(CurrentKernelSegment, NewKernelSegment);
+#else
   if (NewKernelSegment < CurrentKernelSegment ||
       NewKernelSegment == 0xffff)
     fmemcpy(HMADest, HMASource, len);
   /* else it's the very first relocation: handled by kernel.asm */
+#endif
 
   HMAFree = (FP_OFF(HMADest) + len + 0xf) & 0xfff0;
   /* first free byte after HMA_TEXT on 16 byte boundary */
@@ -409,4 +456,3 @@ void MoveKernel(unsigned NewKernelSegment)
 errorReturn:
   for (;;) ;
 }
-
