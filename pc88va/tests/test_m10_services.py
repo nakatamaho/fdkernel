@@ -27,7 +27,8 @@ class ServicesTests(unittest.TestCase):
             source = root/'test.asm'
             source.write_text('bits 16\ncpu 8086\norg 0\n' +
                 '\n'.join('dw '+symbol for symbol in NAMES)+'\n'+
-                '%define M10_FLAT_TEST 1\n%define CONSOLE_FLAT_TEST 1\n'+
+                '%define M10_FLAT_TEST 1\n%define CONSOLE_FLAT_TEST 1\n'
+                '%define M10_VISIBLE_DIAGNOSTICS 1\n'+
                 '%include "console.asm"\n%include "machine_services.asm"\n')
             subprocess.run(['nasm','-f','bin','-DPC88VA','-I',str(TARGET/'kernel')+'/',
                             '-o',str(root/'test.bin'),str(source)],check=True,capture_output=True)

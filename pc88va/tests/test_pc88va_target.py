@@ -65,8 +65,12 @@ class TargetTests(unittest.TestCase):
 
     def test_stubs_have_no_hardware_access(self) -> None:
         text = (TARGET / "kernel/stubs.c").read_text(encoding="utf-8").lower()
-        forbidden = ("__int__", " out ", " in ", "outp(", "inp(", "asm", "firmware")
+        forbidden = ("__int__", " out ", " in ", "outp(", "inp(", "firmware")
         self.assertFalse(any(token in text for token in forbidden))
+        # ASMCFUNC is a declaration macro, not inline assembly.  Match the
+        # standalone source token so the bridge's calling-convention marker
+        # does not trigger this hardware-access check.
+        self.assertIsNone(re.search(r"\basm\b", text))
 
     def test_no_ambient_time_macros(self) -> None:
         for path in sorted(TARGET.rglob("*")):
