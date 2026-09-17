@@ -255,6 +255,8 @@ extern BYTE ASM _ib_start[], ASM _ib_end[];
 /* _init_end is not the full startup-stack boundary on PC-88VA. */
 extern BYTE FAR ASM _init_end[];
 extern BYTE FAR ASM _pc88va_stack_end[];
+/* Return the MZ load segment of the resident initial image. */
+extern unsigned FAR ASMPASCAL pc88va_image_segment(void);
 #else
 extern BYTE ASM _init_end[];
 #endif

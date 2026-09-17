@@ -154,6 +154,8 @@ STATIC seg umb_base_seg BSS_INIT(0);
 #if defined(PC88VA)
 /* Upper edge of the pre-MCB arena while the startup buffers are live. */
 STATIC seg pc88va_mcb_top BSS_INIT(0);
+/* MCB immediately before the still-live initial image and startup stack. */
+STATIC seg pc88va_image_mcb BSS_INIT(0);
 /* The relocated common text is a live, non-free MCB between two arenas. */
 STATIC seg pc88va_resident_mcb BSS_INIT(0);
 STATIC seg pc88va_suffix_mcb BSS_INIT(0);
@@ -400,6 +402,8 @@ void PreConfig2(void)
   seg arena_base;
   seg arena_top;
   seg arena_limit;
+  seg image_start;
+  seg stack_end;
   seg resident_start;
   seg resident_end;
   UWORD resident_paras;
@@ -417,11 +421,14 @@ void PreConfig2(void)
 
 #if defined(PC88VA)
   /*
-   * The relocated kernel, startup stack, and temporary pre-MCB buffers are
-   * all live at this point.  The first MCB must begin above the complete
-   * loader-provided stack, not at _init_end (which precedes its upper edge).
+   * The loader's low workspace is no longer live after the MZ handoff, but
+   * the expanded initial image and its stack remain live until the common
+   * kernel has completed startup.  Build an explicit reserved MCB for that
+   * interval instead of hiding all lower RAM behind a single high start.
    */
-  arena_base = pc88va_para_segment((BYTE FAR *)_pc88va_stack_end);
+  image_start = (seg)pc88va_image_segment();
+  stack_end = pc88va_para_segment((BYTE FAR *)_pc88va_stack_end);
+  arena_base = stack_end;
   resident_start = (seg)CurrentKernelSegment;
   /* lpTop is deliberately kept in a non-canonical segment:offset form.
    * CurrentKernelSegment is the paragraph where the copied text actually
@@ -431,23 +438,34 @@ void PreConfig2(void)
   arena_limit = (seg)(ram_top * 64U);
   resident_paras = (UWORD)((HMAFree + 15UL) / 16UL);
   resident_end = (seg)(resident_start + resident_paras);
-  if (arena_top <= arena_base + 1U ||
+  if (image_start <= PC88VA_FIRMWARE_END_SEG + 1U ||
+      image_start >= stack_end ||
+      arena_top <= arena_base + 1U ||
       resident_start != arena_top ||
       resident_paras == 0 ||
       (resident_end + 1U) >= arena_limit ||
-      resident_start <= arena_base + 1U)
+      resident_start <= arena_base + 1U ||
+      stack_end <= PC88VA_FIRMWARE_END_SEG + 2U)
     init_fatal("PC88VA resident arena");
 
-  base_seg = LoL->first_mcb = arena_base;
   /*
-   * Keep the resident HMA text out of DOS allocations while exposing the
-   * ordinary RAM above it.  The low free block ends at the MCB immediately
-   * before the relocated text; a resident-owned MCB covers the text itself;
-   * the terminal free block then continues up to the RAM/TVRAM boundary.
+   * The handoff-released prefix is [firmware_end,image_start).  Reserve the
+   * complete initial image and startup stack in one owner-8 block, then keep
+   * the existing free arena, relocated HMA text, and terminal suffix as
+   * separate MCBs.  MCB sizes count data paragraphs and therefore include
+   * neither the preceding nor the following MCB header.
    */
+  base_seg = LoL->first_mcb = PC88VA_FIRMWARE_END_SEG;
+  pc88va_image_mcb = (seg)(image_start - 1U);
   pc88va_resident_mcb = (seg)(resident_start - 1U);
   pc88va_suffix_mcb = resident_end;
   pc88va_init_mcb(base_seg,
+                  (UWORD)(pc88va_image_mcb - base_seg - 1U),
+                  MCB_NORMAL, FREE_PSP);
+  pc88va_init_mcb(pc88va_image_mcb,
+                  (UWORD)(stack_end - image_start),
+                  MCB_NORMAL, 8);
+  pc88va_init_mcb(arena_base,
                   (UWORD)(pc88va_resident_mcb - arena_base - 1U),
                   MCB_NORMAL, FREE_PSP);
   pc88va_init_mcb(pc88va_resident_mcb, resident_paras,

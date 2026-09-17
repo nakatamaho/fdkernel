@@ -52,10 +52,13 @@ static BYTE *mcb_hRcsId =
 #define MCB_LAST        0x5a
 
 #if defined(PC88VA)
-/* PC-88VA reserves physical 0600h-0fffh for system use, and the
-   Text BIOS keeps callback state at physical 10b0h.  The initial
-   entry scratch remains at 0060:0000; place the DOS PSP after that
-   firmware state so PSP initialization cannot clear the callback. */
+/* The PC-88VA firmware/loader contract owns the first 64 KiB during
+   handoff.  DOS may expose the paragraph beginning at 1000h only after the
+   loader has transferred control and the firmware-owned interval is no
+   longer used by the kernel. */
+#define PC88VA_FIRMWARE_END_SEG 0x1000U
+/* Keep the DOS PSP in the reserved low workspace; it remains unavailable to
+   the allocator even after the handoff prefix is released. */
 #define DOS_PSP         0x0200
 #elif defined(NEC98)
 #define DOS_PSP         (0x0060 + 0x02d0)  /* see nec98/kernel/kernel.asm */

@@ -41,6 +41,7 @@ extern pc88va_m12_request_
 extern pc88va_m12_buffer_
 extern pc88va_m12_drive_context_
 extern _int21_service
+extern entry
 
 segment _TEXT class=CODE public use16
 
@@ -70,6 +71,14 @@ pc88va_int21_service_far_:
 global PC88VA_MEMORY_KB
 PC88VA_MEMORY_KB:
         mov ax, 640
+        retf
+
+; Return the segment where the MZ loader placed the initial kernel image.
+; `entry` is the zero-offset PSP/MZ entry, so its relocated segment is the
+; image base even though the common resident text is later copied elsewhere.
+global PC88VA_IMAGE_SEGMENT
+PC88VA_IMAGE_SEGMENT:
+        mov ax, seg entry
         retf
 
 ; DOS clock hooks use the PC-88VA calendar BIOS.  INT 8Ch/AH=02 returns the
