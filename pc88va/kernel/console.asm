@@ -428,6 +428,8 @@ pc88va_console_putc_:
         je .accepted
         cmp ax, 10
         je .accepted
+        cmp ax, 08h
+        je .accepted
         cmp ax, 020h
         jb .unavailable
         cmp ax, 07eh
