@@ -66,11 +66,60 @@ pc88va_int21_service_far_:
         pop bp
         retf
 
-; Conventional-memory adapter value.  This is a bounded platform contract,
-; not a claim that the host has a particular amount of RAM.
+; Read the PC-88VA BIOS main-memory selection from the native backup RAM.
+; VAEG exposes the 0x04000-byte VA backup image at B000:0000.  The system
+; memory bank is the high byte of the word port 0152h (the low byte is the
+; ROM-bank value); selecting bank 9 makes B000:1FC4 the BIOS memory field.
+; The emulator's VA and VA2 persistence files use the same record layout;
+; only the filename selected by the frontend differs.
 global PC88VA_MEMORY_KB
 PC88VA_MEMORY_KB:
-        mov ax, 640
+        pushf
+        cli
+        push bx
+        push dx
+        push si
+        push es
+
+        ; Preserve the ROM-bank byte while selecting system-memory bank 9.
+        mov dx, 0152h
+        in ax, dx
+        push ax
+        and ah, 0f0h
+        or ah, 09h
+        out dx, ax
+
+        mov ax, 0b000h
+        mov es, ax
+        mov al, [es:1fc4h]
+        and al, 07h
+        ; VAEG encodes 256/384/512/640 KiB as low-bit codes 1..4.
+        ; Code zero is the erased/missing record state; codes above four are
+        ; unsupported.  Return zero on either case so the caller cannot use
+        ; an invented ceiling.
+        cmp al, 4
+        ja .memory_invalid
+        or al, al
+        jz .memory_invalid
+        inc al
+        mov bl, 128
+        mul bl
+        mov si, ax
+        jmp short .memory_restore
+
+.memory_invalid:
+        xor si, si
+
+.memory_restore:
+        mov dx, 0152h
+        pop ax
+        out dx, ax
+        mov ax, si
+        pop es
+        pop si
+        pop dx
+        pop bx
+        popf
         retf
 
 ; Return the segment where the MZ loader placed the initial kernel image.
