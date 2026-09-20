@@ -30,11 +30,13 @@ class M13TargetTests(unittest.TestCase):
         self.assertNotIn("-DNEC98", text)
         self.assertNotIn("-DIBMPC", text)
 
-    def test_m13_adapter_refuses_writes(self):
+    def test_m13_read_contract_remains_reachable_after_m14_transition(self):
         text = (TARGET / "kernel/m13_platform.asm").read_text()
-        self.assertIn("reject_word FL_WRITE", text)
-        self.assertIn("reject_word FL_FORMAT", text)
-        self.assertIn("mov ax, 5", text)
+        # M13's historical read-only image remains the qualification control;
+        # the active M14 source intentionally adds a separate VA write path.
+        self.assertIn("global FL_READ", text)
+        self.assertIn("global FL_WRITE", text)
+        self.assertIn("global FL_VERIFY", text)
         self.assertIn("pc88va_kernel_disk_read_", text)
 
     def test_m12_target_remains_compile_only_contract(self):

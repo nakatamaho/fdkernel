@@ -222,7 +222,7 @@ build/console_input.obj: kernel/console_input.asm
 	-mkdir -p build bin
 	$(NASM) $(NASMFLAGS) -o $@ kernel/console_input.asm
 
-build/resident_disk.obj: kernel/resident_disk.asm boot/loader_abi.inc boot/disk_read.inc
+build/resident_disk.obj: kernel/resident_disk.asm boot/loader_abi.inc boot/disk_read.inc boot/disk_write.inc
 	-mkdir -p build bin
 	$(NASM) $(NASMFLAGS) -Iboot/ -o $@ kernel/resident_disk.asm
 

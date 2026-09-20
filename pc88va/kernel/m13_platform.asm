@@ -2,7 +2,8 @@
 ; PC-88VA adapter for the common FreeDOS block and clock interfaces.
 ;
 ; The adapter owns no filesystem policy.  It translates the common driver
-; request to the resident M12 read ABI and refuses every write/format path.
+; request to the resident bounded sector ABI.  Filesystem policy, caching,
+; and DOS error presentation remain in the common kernel.
 bits 16
 cpu 8086
 
@@ -36,7 +37,9 @@ cpu 8086
 %endif
 
 extern pc88va_kernel_disk_read_
+extern pc88va_kernel_disk_write_
 extern pc88va_kernel_firmware_read_one_
+extern pc88va_kernel_firmware_write_one_
 extern pc88va_m12_request_
 extern pc88va_m12_buffer_
 extern pc88va_m12_drive_context_
@@ -219,22 +222,44 @@ WRITEATCLOCK:
         ; The pointer is NEAR data even though the code call is FAR.
         retf 8
 
-; BOOL fl_reset(WORD drive).  The medium-model Pascal caller supplies one
-; word below the FAR return frame.  This read-only adapter has no reset
-; operation; retain the zero result without removing either return word.
+; BOOL fl_reset(WORD drive).  AH=00h resets the VA floppy subsystem and
+; clears its retry/status state.  CF clear is the common driver's TRUE
+; result; CF set is FALSE.  CX is outside the declared clobber set.
 global FL_RESET
 FL_RESET:
-        xor ax, ax
+        push bp
+        mov bp, sp
+        push cx
+        mov ch, byte [bp+6]
+        xor ah, ah
+        int 80h
+        sbb ax, ax
+        inc ax
+        pop cx
+        pop bp
         retf 2
 
-; COUNT fl_diskchanged(WORD drive): no media-change event is synthesized.
+; COUNT fl_diskchanged(WORD drive): ask the VA BIOS for its change status.
+; AH=09h reports CF clear when the current medium is usable and CF set when
+; the controller cannot establish that it is unchanged.  The common driver
+; deliberately treats the latter as a conservative revalidation request.
 global FL_DISKCHANGED
 FL_DISKCHANGED:
-        pop ax
-        pop dx
-        push ax
+        push bp
+        mov bp, sp
+        push cx
+        mov ch, byte [bp+6]
+        mov ah, 09h
+        int 80h
+        pop cx
+        jc .changed
         xor ax, ax
-        ret
+        pop bp
+        retf 2
+.changed:
+        mov ax, 1
+        pop bp
+        retf 2
 
 ; Common driver read: drive, head, cylinder, sector, count, ES:BX buffer.
 ; M12 accepts at most four 1024-byte sectors per request.  The loop preserves
@@ -345,9 +370,279 @@ FL_READ:
         pop bp
         retf 14
 
-; Every mutating or unsupported low-level operation is rejected before any
-; resident callback can run.  The common DOS layer maps this to its documented
-; write-protect/error status.
+; Translate the VA AH=82 status byte into the common fl_* status contract.
+; The common dskerr() path distinguishes write protection (3), not-ready
+; (80h), CRC (10h), and not-found (04h); returning the raw VA status would
+; misclassify those failures as a generic command error.
+pc88va_map_va_write_status:
+        cmp ax, 5
+        jne .generic
+        mov ax, [cs:pc88va_m12_request_+RD_ADAPTER_STATUS]
+        cmp ax, 5
+        je .write_protect
+        cmp ax, 4
+        je .not_ready
+        cmp ax, 0dh
+        je .not_ready
+        cmp ax, 6
+        je .crc
+        cmp ax, 7
+        je .crc
+        cmp ax, 8
+        jb .generic
+        cmp ax, 0ch
+        ja .generic
+        mov ax, 04h
+        ret
+.write_protect:
+        mov ax, 3
+        ret
+.not_ready:
+        mov ax, 80h
+        ret
+.crc:
+        mov ax, 10h
+        ret
+.generic:
+        mov ax, 2
+        ret
+
+; COUNT fl_write(WORD drive, WORD head, WORD cylinder, WORD sector,
+;                WORD count, UBYTE FAR *buffer).
+; The resident transfer core performs all range, capacity, physical-end,
+; retry, and completed-byte accounting.  The adapter copies one sector at a
+; time into its resident scratch buffer so the VA AH=82h callback never sees
+; an unvalidated DOS buffer or a segment-wrapping transfer.
+global FL_WRITE
+FL_WRITE:
+        push bp
+        mov bp, sp
+        push ds
+        push si
+        push di
+        push bx
+        push cx
+        push dx
+        push es
+        pc88va_arg_far drive, head, track, sector, count, {buffer,4}
+        mov ax, [.drive]
+        or ax, ax
+        jnz .write_bad
+        mov ax, [.head]
+        cmp ax, 2
+        jae .write_bad
+        mov ax, [.sector]
+        cmp ax, 1
+        jb .write_bad
+        cmp ax, 8
+        ja .write_bad
+        mov ax, [.count]
+        or ax, ax
+        jz .write_bad
+        mov cx, ax
+        mov dx, [.track]
+        cmp dx, 160
+        jae .write_bad
+        shl dx, 1
+        add dx, [.head]
+        shl dx, 1
+        shl dx, 1
+        shl dx, 1
+        add dx, [.sector]
+        dec dx
+        mov si, dx
+        add dx, cx
+        cmp dx, 1280
+        ja .write_bad
+        les di, [.buffer]
+.write_next:
+        cmp di, 0xfc00
+        jae .write_bad
+        push cx
+        push si
+        push di
+        push ds
+        push es
+        mov si, di
+        mov ax, es
+        mov ds, ax
+        push cs
+        pop es
+        mov di, pc88va_m12_buffer_
+        mov cx, 512
+        cld
+        rep movsw
+        pop es
+        pop ds
+        pop di
+        pop si
+        pop cx
+        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
+        mov word [cs:pc88va_m12_request_+RD_LBA], si
+        mov word [cs:pc88va_m12_request_+RD_COUNT], 1
+        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
+        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
+        mov word [cs:pc88va_m12_request_+RD_TOTAL_SECTORS], 1280
+        mov word [cs:pc88va_m12_request_+RD_SECTORS_TRACK], 8
+        mov word [cs:pc88va_m12_request_+RD_HEADS], 2
+        mov word [cs:pc88va_m12_request_+RD_SECTOR_BYTES], 1024
+        mov ax, [cs:pc88va_m12_drive_context_]
+        mov word [cs:pc88va_m12_request_+RD_DRIVE_CONTEXT], ax
+        mov word [cs:pc88va_m12_request_+RD_ADAPTER_OFFSET], pc88va_kernel_firmware_write_one_
+        mov word [cs:pc88va_m12_request_+RD_ADAPTER_SEGMENT], cs
+        mov word [cs:pc88va_m12_request_+RD_RETRIES], 3
+        mov word [cs:pc88va_m12_request_+RD_COMPLETED], 0
+        mov ax, pc88va_m12_request_
+        push ds
+        push cs
+        pop ds
+        call pc88va_kernel_disk_write_
+        pop ds
+        or ax, ax
+        jz .write_sector_ok
+        call pc88va_map_va_write_status
+        jmp short .write_return
+.write_sector_ok:
+        mov si, [cs:pc88va_m12_request_+RD_LBA]
+        inc si
+        add di, 1024
+        dec cx
+        jnz .write_next
+        xor ax, ax
+        jmp short .write_return
+.write_bad:
+        mov ax, 2
+.write_return:
+        pop es
+        pop dx
+        pop cx
+        pop bx
+        pop di
+        pop si
+        pop ds
+        pop bp
+        retf 14
+
+; COUNT fl_verify(...): read each requested sector through the production VA
+; path and compare it with the caller buffer.  A mismatch is reported as the
+; common CRC/data error; no write is implied by verification.
+global FL_VERIFY
+FL_VERIFY:
+        push bp
+        mov bp, sp
+        push ds
+        push si
+        push di
+        push bx
+        push cx
+        push dx
+        push es
+        pc88va_arg_far drive, head, track, sector, count, {buffer,4}
+        mov ax, [.drive]
+        or ax, ax
+        jnz .verify_bad
+        mov ax, [.head]
+        cmp ax, 2
+        jae .verify_bad
+        mov ax, [.sector]
+        cmp ax, 1
+        jb .verify_bad
+        cmp ax, 8
+        ja .verify_bad
+        mov ax, [.count]
+        or ax, ax
+        jz .verify_bad
+        mov cx, ax
+        mov dx, [.track]
+        cmp dx, 160
+        jae .verify_bad
+        shl dx, 1
+        add dx, [.head]
+        shl dx, 1
+        shl dx, 1
+        shl dx, 1
+        add dx, [.sector]
+        dec dx
+        mov si, dx
+        add dx, cx
+        cmp dx, 1280
+        ja .verify_bad
+        les di, [.buffer]
+.verify_next:
+        cmp di, 0xfc00
+        jae .verify_bad
+        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
+        mov word [cs:pc88va_m12_request_+RD_LBA], si
+        mov word [cs:pc88va_m12_request_+RD_COUNT], 1
+        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
+        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
+        mov word [cs:pc88va_m12_request_+RD_TOTAL_SECTORS], 1280
+        mov word [cs:pc88va_m12_request_+RD_SECTORS_TRACK], 8
+        mov word [cs:pc88va_m12_request_+RD_HEADS], 2
+        mov word [cs:pc88va_m12_request_+RD_SECTOR_BYTES], 1024
+        mov ax, [cs:pc88va_m12_drive_context_]
+        mov word [cs:pc88va_m12_request_+RD_DRIVE_CONTEXT], ax
+        mov word [cs:pc88va_m12_request_+RD_ADAPTER_OFFSET], pc88va_kernel_firmware_read_one_
+        mov word [cs:pc88va_m12_request_+RD_ADAPTER_SEGMENT], cs
+        mov word [cs:pc88va_m12_request_+RD_RETRIES], 3
+        mov word [cs:pc88va_m12_request_+RD_COMPLETED], 0
+        mov ax, pc88va_m12_request_
+        push ds
+        push cs
+        pop ds
+        call pc88va_kernel_disk_read_
+        pop ds
+        or ax, ax
+        jnz .verify_io_error
+        push cx
+        push si
+        push di
+        push ds
+        push es
+        mov si, di
+        mov ax, es
+        mov ds, ax
+        push cs
+        pop es
+        mov di, pc88va_m12_buffer_
+        mov cx, 512
+        cld
+        repe cmpsw
+        pop es
+        pop ds
+        pop di
+        pop si
+        pop cx
+        jne .verify_mismatch
+        mov si, [cs:pc88va_m12_request_+RD_LBA]
+        inc si
+        add di, 1024
+        dec cx
+        jnz .verify_next
+        xor ax, ax
+        jmp short .verify_return
+.verify_io_error:
+        mov ax, 5
+        jmp short .verify_return
+.verify_mismatch:
+        mov ax, 10h
+        jmp short .verify_return
+.verify_bad:
+        mov ax, 2
+.verify_return:
+        pop es
+        pop dx
+        pop cx
+        pop bx
+        pop di
+        pop si
+        pop ds
+        pop bp
+        retf 14
+
+; Format and the legacy/non-VA extensions remain explicitly unsupported.
 %macro reject_word 2
 global %1
 %1:
@@ -360,9 +655,7 @@ global %1
         ret
 %endmacro
 
-reject_word FL_WRITE, 12
 reject_word FL_FORMAT, 12
-reject_word FL_VERIFY, 12
 reject_word FL_SETDISKTYPE, 4
 reject_word FL_SETMEDIATYPE, 6
 reject_word FL_LBA_READWRITE, 8

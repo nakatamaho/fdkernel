@@ -1,9 +1,9 @@
 ; SPDX-License-Identifier: GPL-2.0-or-later
-; M12: resident read-only block service after M10/M11 startup.
+; M14: resident bounded block service after M10/M11 startup.
 ;
-; The request record and destination buffer are kernel-owned storage.  The
-; M08 parameterized core remains the single validator/transfer state machine;
-; this file supplies the resident entry and the accepted firmware callback.
+; The request record and scratch buffer are kernel-owned storage.  The
+; parameterized read/write cores remain the single validator/transfer state
+; machines; this file supplies resident entries and VA firmware callbacks.
 bits 16
 cpu 8086
 %ifndef PC88VA
@@ -30,9 +30,12 @@ extern pc88va_console_putc_
 ; The loader object retains its historical copy; this copy is linked into the
 ; kernel resident service so the public entry is not loader-only.
 %include "disk_read.inc"
+%include "disk_write.inc"
 
 global pc88va_kernel_disk_read_
+global pc88va_kernel_disk_write_
 global pc88va_kernel_firmware_read_one_
+global pc88va_kernel_firmware_write_one_
 global pc88va_m12_prepare_
 global pc88va_m12_diagnostic_
 global pc88va_m12_control_
@@ -117,6 +120,84 @@ pc88va_kernel_firmware_read_one_:
         mov ax, 5
         xor cx, cx
         retf
+
+; PC-88VA data-write callback.  AH=82h is the VA write-sector service.
+; The transfer core has already bounded ES:BP to the resident scratch area
+; and supplies one 1024-byte sector for this callback.
+pc88va_kernel_firmware_write_one_:
+        mov ax, [si+40]
+        mov es, ax
+        mov bp, [si+38]
+        mov bh, [si+32]
+        mov bl, [si+34]
+        mov cx, [si+32]
+        shl cx, 1
+        or cx, [si+34]
+        mov ax, [si+20]
+        mov ch, al
+        mov dh, [si+36]
+        mov dl, 3
+        mov ax, 8201h
+        push word [cs:pc88va_m12_call_flags_]
+        popf
+        int 80h
+        jc .write_firmware_error
+        mov al, ah
+        or al, al
+        jnz .write_firmware_error_status
+        xor ax, ax
+        mov cx, [si+18]
+        retf
+.write_firmware_error:
+        mov al, ah
+.write_firmware_error_status:
+        xor ah, ah
+        xor cx, cx
+        or ax, ax
+        jnz .write_firmware_error_return
+        mov ax, 0dh
+.write_firmware_error_return:
+        retf
+
+; Resident write entry mirrors the accepted read entry's ownership and
+; non-reentrancy checks, but invokes the write transfer core.
+pc88va_kernel_disk_write_:
+        pushf
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        push bp
+        push ds
+        push es
+        mov bp, sp
+        test word [ss:bp+16], 0500h
+        jnz .write_bad
+        mov bx, ds
+        mov dx, cs
+        cmp bx, dx
+        jne .write_bad
+        cmp byte [cs:pc88va_m10_state_], 2
+        jne .write_bad
+        cmp ax, pc88va_m12_request_
+        jne .write_bad
+        mov si, ax
+        call pc88va_disk_write_core
+        jmp short .write_return
+.write_bad:
+        mov ax, DISK_CONTRACT
+.write_return:
+        pop es
+        pop ds
+        pop bp
+        pop di
+        pop si
+        pop dx
+        pop cx
+        pop bx
+        popf
+        ret
 
 ; Initialize the reusable record for one bounded resident request.  The
 ; caller may replace LBA/COUNT before invoking pc88va_kernel_disk_read_.
