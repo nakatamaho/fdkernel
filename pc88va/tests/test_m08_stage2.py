@@ -42,9 +42,9 @@ def synthetic_profile():
 def low_staging_profile():
     profile = synthetic_profile()
     profile["regions"].update({
-        "scratch": [0x36000, 0x3a000],
-        "kernel_file": [0x26000, 0x35ff0],
-        "kernel_allocation": [0x26000, 0x35ff0],
+        "scratch": [0x37000, 0x3b000],
+        "kernel_file": [0x27000, 0x36ff0],
+        "kernel_allocation": [0x27000, 0x36ff0],
     })
     return profile
 
@@ -66,8 +66,8 @@ class ProfileTests(unittest.TestCase):
     def test_low_staging_alias_is_explicit_and_fits_256k(self):
         profile = low_staging_profile()
         result = definitions(profile)
-        self.assertEqual(result["PC88VA_LOW_STAGING_SEGMENT"], 0x2600)
-        self.assertEqual(result["PC88VA_INITIAL_LOAD_SEGMENT"], 0x2600)
+        self.assertEqual(result["PC88VA_LOW_STAGING_SEGMENT"], 0x2700)
+        self.assertEqual(result["PC88VA_INITIAL_LOAD_SEGMENT"], 0x2700)
         self.assertEqual(result["S2_KERNEL_IN_PLACE"], 1)
         self.assertLessEqual(profile["regions"]["kernel_file"][1], 0x40000)
         self.assertEqual(profile["regions"]["kernel_file"], profile["regions"]["kernel_allocation"])
