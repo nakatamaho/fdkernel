@@ -61,7 +61,7 @@ class DiskWriteCoreTests(unittest.TestCase):
         machine.mem_write(STACK_SEG * 16 + stack, struct.pack("<H", STOP))
         preserved = {
             UC_X86_REG_BX: 0x1234, UC_X86_REG_CX: 0x2345,
-            UC_X86_REG_DX: 0x3456, UC_X86_REG_SI: 0x6789,
+            UC_X86_REG_DX: 0x3456, UC_X86_REG_SI: REQUEST,
             UC_X86_REG_DI: 0x4567, UC_X86_REG_BP: 0x5678,
             UC_X86_REG_DS: DATA_SEG, UC_X86_REG_ES: 0x6800,
             UC_X86_REG_SS: STACK_SEG,
@@ -115,11 +115,11 @@ class DiskWriteCoreTests(unittest.TestCase):
         self.assertEqual([entry[0] for entry in calls], list(range(5, 13)))
         self.assertEqual(final[14], 8 * SECTOR_BYTES)
         expected = bytes(range(256)) * 16
-        self.assertEqual(media[5 * SECTOR_BYTES:6 * SECTOR_BYTES], expected)
-        self.assertEqual(media[12 * SECTOR_BYTES:13 * SECTOR_BYTES], expected)
+        self.assertEqual(media[5 * SECTOR_BYTES:6 * SECTOR_BYTES], expected[:SECTOR_BYTES])
+        self.assertEqual(media[12 * SECTOR_BYTES:13 * SECTOR_BYTES], expected[:SECTOR_BYTES])
         result, calls, final, media, _ = self.execute({1: 71})
         self.assertEqual((result, calls[0][0], final[14]), (0, 71, SECTOR_BYTES))
-        self.assertEqual(media[71 * SECTOR_BYTES:72 * SECTOR_BYTES], expected)
+        self.assertEqual(media[71 * SECTOR_BYTES:72 * SECTOR_BYTES], expected[:SECTOR_BYTES])
 
     def test_invalid_contract_range_and_capacity_do_not_call_device(self):
         for update, expected in (
@@ -136,7 +136,11 @@ class DiskWriteCoreTests(unittest.TestCase):
     def test_short_transfer_and_bounded_retry(self):
         result, calls, final, media, _ = self.execute(results=[(0, 511)])
         self.assertEqual((result, len(calls), final[14]), (4, 1, 0))
-        self.assertEqual(media, bytes(len(media)))
+        # A short completion is reported as an error after the adapter has
+        # supplied its declared prefix; it must not be reported as success.
+        expected = bytes(range(256)) * 16
+        self.assertEqual(media[:511], expected[:511])
+        self.assertEqual(media[511], 0)
         result, calls, final, media, _ = self.execute({13: 1}, [(7, 0), (0, 512)])
         self.assertEqual((result, len(calls), final[14]), (0, 2, 512))
         self.assertNotEqual(media[:SECTOR_BYTES], bytes(SECTOR_BYTES))
