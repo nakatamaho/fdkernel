@@ -150,6 +150,14 @@ kernel_start:
                 or      ax,ax
                 jnz     kernel_platform_halt
                 mov     ds,[cs:_INIT_DGROUP]
+                extern  _m13_layout
+                cmp     word [_m13_layout+22],1
+                jne     kernel_platform_halt
+                ; M10 has returned: no bootstrap frame remains. INIT gets
+                ; its own high stack before C creates any local pointers.
+                mov     ax,[_m13_layout+16]
+                mov     ss,ax
+                mov     sp,[_m13_layout+18]
                 push    ds
                 pop     es
                 ; Watcom C entry points use BP as the caller stack frame.
@@ -846,10 +854,14 @@ __ib_end:
 
 ; kernel startup stack
                 global  init_tos
+%ifndef PC88VA
                 resw 512
+%endif
 init_tos:
 ; the last paragraph of conventional memory might become an MCB
+%ifndef PC88VA
                 resb 16
+%endif
                 global __init_end
 __init_end:
 init_end:        
@@ -987,7 +999,15 @@ __HMATextEnd:                   ; and c version
 ; The default stack (_TEXT:0) will overwrite the data area, so I create a dummy
 ; stack here to ease debugging. -- ror4
 
-segment _STACK  class(STACK) nobits stack
+%ifdef PC88VA_M13
+; Introduce the discardable code class before STACK so the bootstrap stack
+; remains outside its file-backed source range in the linked MZ image.
+segment M13_INIT_TEXT class=M13INIT public align=16
+group M13_INIT_GROUP M13_INIT_TEXT
+segment _STACK class(STACK) nobits stack align=16
+%else
+segment _STACK class(STACK) nobits stack
+%endif
 
 %ifdef PC88VA
 ; Export the exclusive upper boundary of the complete startup stack.  The

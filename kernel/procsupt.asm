@@ -308,6 +308,9 @@ reloc_call_p_0:
         ; Resident medium-model C code is not in the moving HMA segment.
         ; Its CDECL parameter fetch also requires a two-word return frame.
         call seg _P_0:_P_0
+        ; Never fall through into another resident helper if C returns.
+        extern _pc88va_p0_returned
+        jmp far _pc88va_p0_returned
 %else
         call _P_0       ; no return, allow parameter fetch from C
 %endif

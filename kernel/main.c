@@ -31,6 +31,9 @@
 #include "init-mod.h"
 #include "dyndata.h"
 #include "debug.h"
+#if defined(PC88VA)
+#include "../pc88va/kernel/m13_layout.h"
+#endif
 
 #ifdef VERSION_STRINGS
 static BYTE *mainRcsId =
@@ -58,7 +61,6 @@ STATIC VOID InitSerialPorts(VOID);
 STATIC void CheckContinueBootFromHarddisk(void);
 STATIC void setup_int_vectors(void);
 #if defined(PC88VA)
-#define PC88VA_KERNEL_SEGMENT 0x9800U
 #if defined(M13_VISIBLE_DIAGNOSTICS)
 #include "../pc88va/kernel/m13_diag.h"
 #endif
@@ -391,11 +393,13 @@ STATIC void init_kernel(void)
 
   /* move kernel to high conventional RAM, just below the init code */
 #if defined(PC88VA)
-  /* The PC-88VA loader owns the compressed image interval only.  Keep the
-     resident common/HMA text in a separately owned high-conventional range;
-     MoveKernel performs the initial copy there before DOS allocations use the
-     old linked HMA interval. */
-  lpTop = MK_FP(PC88VA_KERNEL_SEGMENT, 0);
+  /* Keep the final assembly text after the low resident prefix. INIT code
+     and its stack are separately placed; the old text bounds NEAR Dyn. */
+  if (m13_layout.version != 1 ||
+      (m13_layout.memory_top_segment != PC88VA_LAYOUT_RUNTIME_MEMORY_TOP &&
+       m13_layout.memory_top_segment != (ULONG)ram_top * 64UL))
+    init_fatal("PC88VA placement descriptor");
+  lpTop = MK_FP(m13_layout.resident_text_segment, 0);
 #elif defined(__WATCOMC__)
   lpTop = MK_FP(_CS, 0);
 #else
@@ -408,11 +412,10 @@ STATIC void init_kernel(void)
      Their targets are resident C handlers.  Retain the explicit binding here
      without changing the separately relocated HMA interrupt entries. */
   {
-    unsigned cseg = FP_SEG(FreeDOSmain);
     *((unsigned FAR *)MK_FP(FP_SEG(reloc_call_blk_driver),
-                            FP_OFF(reloc_call_blk_driver) + 3)) = cseg;
+                            FP_OFF(reloc_call_blk_driver) + 3)) = FP_SEG(blk_driver);
     *((unsigned FAR *)MK_FP(FP_SEG(reloc_call_clk_driver),
-                            FP_OFF(reloc_call_clk_driver) + 3)) = cseg;
+                            FP_OFF(reloc_call_clk_driver) + 3)) = FP_SEG(clk_driver);
   }
   /* MoveKernel relocates the HMA text, including the common INT 21 entry.
      The initial vector table was installed before that move, so refresh only
@@ -424,7 +427,13 @@ STATIC void init_kernel(void)
   (void)pc88va_m13_int21_vector_probe();
 #endif
 #endif
+#if defined(PC88VA)
+  /* Early buffers grow down below the high INIT code and stack. PreConfig2
+     reserves the complete temporary envelope until the resident barrier. */
+  lpTop = MK_FP(m13_layout.init_segment, 0);
+#else
   lpTop = MK_FP(FP_SEG(lpTop) - 0xfff, 0xfff0);
+#endif
 
   /* Initialize IO subsystem                                      */
 #if defined(PC88VA)
@@ -910,11 +919,13 @@ STATIC void InitIO(void)
 }
 
 /* issue an internal error message                              */
+#if !defined(PC88VA)
 VOID init_fatal(BYTE * err_msg)
 {
   printf("\nInternal kernel error - %s\nSystem halted\n", err_msg);
   for (;;) ;
 }
+#endif
 
 /*
        Initialize all printers

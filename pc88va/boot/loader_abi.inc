@@ -185,4 +185,9 @@
 %define BL_SIZE           10
 %define BOOT_CONTRACT     58
 %define BOOT_RETURNED     59
+%define BOOT_CONFIG       60
+%define PC88VA_CFG_NONE       0
+%define PC88VA_CFG_FOUND      1
+%define PC88VA_CFG_INVALID    2
+%define PC88VA_CFG_DUPLICATE  3
 %endif

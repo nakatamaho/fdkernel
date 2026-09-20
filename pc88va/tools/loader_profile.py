@@ -46,8 +46,17 @@ def definitions(profile):
     if not isinstance(firmware, list) or not 1 <= len(firmware) <= 16:
         raise ProfileError("Firmware ownership intervals are required")
     reserved = [interval(v) for v in firmware]
-    for index, (start, end) in enumerate(owned.values()):
-        for other_start, other_end in list(owned.values())[index + 1:] + reserved:
+    in_place = owned["kernel_file"] == owned["kernel_allocation"]
+    for index, (name, (start, end)) in enumerate(owned.items()):
+        for other_name, (other_start, other_end) in list(owned.items())[index + 1:]:
+            # An in-place carrier deliberately aliases the file and allocation
+            # envelopes.  The MZ transform moves the body within that one
+            # interval before the bridge expands the resident image elsewhere.
+            if in_place and {name, other_name} == {"kernel_file", "kernel_allocation"}:
+                continue
+            if start < other_end and other_start < end:
+                raise ProfileError("Owned regions overlap each other or firmware")
+        for other_start, other_end in reserved:
             if start < other_end and other_start < end:
                 raise ProfileError("Owned regions overlap each other or firmware")
     keys(profile["stack"], ("segment", "pointer", "reserve"))
@@ -73,18 +82,49 @@ def definitions(profile):
                "BITMAP": sector + 2 * cache["fat_bytes"] + cache["root_bytes"]}
     if offsets["BITMAP"] + cache["bitmap_bytes"] > owned["scratch"][1] - owned["scratch"][0]:
         raise ProfileError("Metadata workspace exceeds scratch ownership")
+    # CONFIG.SYS is optionally inspected by stage-2 before KERNEL.SYS is
+    # loaded.  Keep the probe buffer after all immutable metadata and bound it
+    # independently of the kernel file and decoder workspaces.
+    config_offset = (offsets["BITMAP"] + cache["bitmap_bytes"] + sector - 1) & ~(sector - 1)
+    config_capacity = min(4096, owned["scratch"][1] - owned["scratch"][0] - config_offset)
+    if config_capacity < sector or config_offset + config_capacity > owned["scratch"][1] - owned["scratch"][0]:
+        raise ProfileError("CONFIG.SYS probe workspace is too small")
     if owned["stage2"][1] - owned["stage2"][0] < sector:
         raise ProfileError("Stage-2 ownership is too small")
+    low_firmware_end = reserved[0][1]
+    if reserved[0][0] != 0 or low_firmware_end > 0x10000:
+        raise ProfileError("The first firmware interval must describe the low protected prefix")
     result = {"PC88VA_PROFILE_VERSION": 1,
               "S2_STACK_SEGMENT": stack["segment"], "S2_STACK_POINTER": stack["pointer"],
               "S2_STACK_RESERVE": stack["reserve"],
               "S2_FAT_CAPACITY": cache["fat_bytes"], "S2_ROOT_CAPACITY": cache["root_bytes"],
-              "S2_BITMAP_CAPACITY": cache["bitmap_bytes"]}
+              "S2_BITMAP_CAPACITY": cache["bitmap_bytes"],
+              # This is the relocatable default file-load contract.  Stage-2
+              # may replace it only with a segment inside this owned window
+              # after its bounded hidden CONFIG.SYS probe.
+              "PC88VA_LOW_STAGING_SEGMENT": owned["kernel_file"][0] // 16,
+              "PC88VA_INITIAL_LOAD_SEGMENT": owned["kernel_file"][0] // 16,
+              "S2_KERNEL_IN_PLACE": int(in_place),
+              "S2_FIRMWARE_LOW_END": low_firmware_end}
     for name, (start, end) in owned.items():
         result["S2_" + name.upper() + "_SEGMENT"] = start // 16
         result["S2_" + name.upper() + "_CAPACITY"] = end - start
     for name, value in offsets.items():
         result["S2_" + name + "_OFFSET"] = value
+    result["S2_CONFIG_OFFSET"] = config_offset
+    result["S2_CONFIG_CAPACITY"] = config_capacity
+    result["S2_CONFIG_SEGMENT"] = owned["scratch"][0] // 16
+    result["S2_FIRMWARE_LOW_END_LO"] = low_firmware_end & 0xffff
+    result["S2_FIRMWARE_LOW_END_HI"] = low_firmware_end >> 16
+    for name, (start, end) in owned.items():
+        result["S2_" + name.upper() + "_START_LO"] = start & 0xffff
+        result["S2_" + name.upper() + "_START_HI"] = start >> 16
+        result["S2_" + name.upper() + "_END_LO"] = end & 0xffff
+        result["S2_" + name.upper() + "_END_HI"] = end >> 16
+    result["S2_FIRMWARE_HIGH_START_LO"] = reserved[-1][0] & 0xffff
+    result["S2_FIRMWARE_HIGH_START_HI"] = reserved[-1][0] >> 16
+    result["S2_FIRMWARE_HIGH_END_LO"] = reserved[-1][1] & 0xffff
+    result["S2_FIRMWARE_HIGH_END_HI"] = reserved[-1][1] >> 16
     for name, value in disk.items():
         result["S2_" + name.upper()] = value
     return result

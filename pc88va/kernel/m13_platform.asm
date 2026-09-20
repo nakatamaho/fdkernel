@@ -43,7 +43,8 @@ extern pc88va_m12_drive_context_
 extern _int21_service
 extern entry
 
-segment _TEXT class=CODE public use16
+%include "kernel/m13_segments.inc"
+segment M13_PLATFORM_TEXT
 
 ; HMA_TEXT invokes the common INT 21 service through a FAR transfer after
 ; relocation.  The Open Watcom medium-model C body is a FAR CDECL function.
@@ -66,11 +67,56 @@ pc88va_int21_service_far_:
         pop bp
         retf
 
-; Conventional-memory adapter value.  This is a bounded platform contract,
-; not a claim that the host has a particular amount of RAM.
+; Read the PC-88VA BIOS main-memory selection from backup RAM.  The BIOS
+; record is exposed at B000:1FC4 when system-memory bank 9 is selected in the
+; high byte of the 0152h word port.  Keep the port word and segment mapping
+; transactionally paired: an interrupt must not observe the temporary bank.
 global PC88VA_MEMORY_KB
 PC88VA_MEMORY_KB:
-        mov ax, 640
+        pushf
+        cli
+        push bx
+        push dx
+        push si
+        push es
+
+        mov dx, 0152h
+        in ax, dx
+        push ax
+        and ah, 0f0h
+        or ah, 09h
+        out dx, ax
+
+        mov ax, 0b000h
+        mov es, ax
+        mov al, [es:1fc4h]
+        and al, 07h
+        ; VAEG and the supported VA BIOS record encode 256, 384, 512,
+        ; and 640 KiB as codes 1..4.  Reject an erased/open-bus record
+        ; instead of fabricating a larger memory ceiling.
+        cmp al, 4
+        ja .memory_invalid
+        or al, al
+        jz .memory_invalid
+        inc al
+        mov bl, 128
+        mul bl
+        mov si, ax
+        jmp short .memory_restore
+
+.memory_invalid:
+        xor si, si
+
+.memory_restore:
+        mov dx, 0152h
+        pop ax
+        out dx, ax
+        mov ax, si
+        pop es
+        pop si
+        pop dx
+        pop bx
+        popf
         retf
 
 ; Return the segment where the MZ loader placed the initial kernel image.
@@ -164,20 +210,22 @@ READPCCLOCK:
 
 global WRITEPCCLOCK
 WRITEPCCLOCK:
-        ret 4
+        ; VOID Pascal(ULONG): two argument words, FAR caller frame.
+        retf 4
 
 global WRITEATCLOCK
 WRITEATCLOCK:
-        ret 10
+        ; VOID Pascal(BYTE *, BYTE, BYTE, BYTE): four argument words.
+        ; The pointer is NEAR data even though the code call is FAR.
+        retf 8
 
-; BOOL fl_reset(WORD drive)
+; BOOL fl_reset(WORD drive).  The medium-model Pascal caller supplies one
+; word below the FAR return frame.  This read-only adapter has no reset
+; operation; retain the zero result without removing either return word.
 global FL_RESET
 FL_RESET:
-        pop ax
-        pop dx
-        push ax
         xor ax, ax
-        ret
+        retf 2
 
 ; COUNT fl_diskchanged(WORD drive): no media-change event is synthesized.
 global FL_DISKCHANGED

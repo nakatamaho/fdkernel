@@ -30,6 +30,9 @@
 #include "portab.h"
 #include "init-mod.h"
 #include "dyndata.h"
+#if defined(PC88VA)
+#include "../pc88va/kernel/m13_layout.h"
+#endif
 #if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
 #include "../pc88va/kernel/m13_diag.h"
 #endif
@@ -152,13 +155,10 @@ struct config Config = {
 STATIC seg base_seg BSS_INIT(0);
 STATIC seg umb_base_seg BSS_INIT(0);
 #if defined(PC88VA)
-/* Upper edge of the pre-MCB arena while the startup buffers are live. */
+/* The low resident hull and high temporary reservation bound one arena. */
 STATIC seg pc88va_mcb_top BSS_INIT(0);
-/* MCB immediately before the still-live initial image and startup stack. */
-STATIC seg pc88va_image_mcb BSS_INIT(0);
-/* The relocated common text is a live, non-free MCB between two arenas. */
-STATIC seg pc88va_resident_mcb BSS_INIT(0);
-STATIC seg pc88va_suffix_mcb BSS_INIT(0);
+UWORD pc88va_boot_mcb BSS_INIT(0);
+UWORD pc88va_boot_top BSS_INIT(0);
 #endif
 BYTE FAR *lpTop BSS_INIT(0);
 STATIC unsigned nCfgLine BSS_INIT(0);
@@ -401,7 +401,6 @@ void PreConfig2(void)
 #if defined(PC88VA)
   seg arena_base;
   seg arena_top;
-  seg arena_limit;
   seg image_start;
   seg stack_end;
   seg resident_start;
@@ -420,60 +419,35 @@ void PreConfig2(void)
    */
 
 #if defined(PC88VA)
-  /*
-   * The loader's low workspace is no longer live after the MZ handoff, but
-   * the expanded initial image and its stack remain live until the common
-   * kernel has completed startup.  Build an explicit reserved MCB for that
-   * interval instead of hiding all lower RAM behind a single high start.
-   */
+  /* The low resident hull is outside the DOS arena. The high temporary
+     envelope includes early buffers, INIT code, and the INIT stack. */
   image_start = (seg)pc88va_image_segment();
-  stack_end = pc88va_para_segment((BYTE FAR *)_pc88va_stack_end);
-  arena_base = stack_end;
+  stack_end = m13_layout.resident_text_segment;
   resident_start = (seg)CurrentKernelSegment;
-  /* lpTop is deliberately kept in a non-canonical segment:offset form.
-   * CurrentKernelSegment is the paragraph where the copied text actually
-   * starts, so use it as the low-arena boundary rather than rounding lpTop's
-   * offset a second time. */
-  arena_top = resident_start;
-  arena_limit = (seg)(ram_top * 64U);
   resident_paras = (UWORD)((HMAFree + 15UL) / 16UL);
-  resident_end = (seg)(resident_start + resident_paras);
-  if (image_start <= PC88VA_FIRMWARE_END_SEG + 1U ||
-      image_start >= stack_end ||
-      arena_top <= arena_base + 1U ||
-      resident_start != arena_top ||
-      resident_paras == 0 ||
-      (resident_end + 1U) >= arena_limit ||
-      resident_start <= arena_base + 1U ||
-      stack_end <= PC88VA_FIRMWARE_END_SEG + 2U)
+  if (m13_layout.version != 1 ||
+      image_start != m13_layout.image_segment ||
+      _SS != m13_layout.init_stack_segment ||
+      (ULONG)ram_top * 64UL > 0xffffUL ||
+      (ULONG)resident_start + resident_paras > 0xffffUL ||
+      image_start < PC88VA_FIRMWARE_END_SEG || image_start >= stack_end ||
+      resident_start != stack_end || resident_paras == 0)
     init_fatal("PC88VA resident arena");
-
-  /*
-   * The handoff-released prefix is [firmware_end,image_start).  Reserve the
-   * complete initial image and startup stack in one owner-8 block, then keep
-   * the existing free arena, relocated HMA text, and terminal suffix as
-   * separate MCBs.  MCB sizes count data paragraphs and therefore include
-   * neither the preceding nor the following MCB header.
-   */
-  base_seg = LoL->first_mcb = PC88VA_FIRMWARE_END_SEG;
-  pc88va_image_mcb = (seg)(image_start - 1U);
-  pc88va_resident_mcb = (seg)(resident_start - 1U);
-  pc88va_suffix_mcb = resident_end;
+  resident_end = (seg)(resident_start + resident_paras);
+  arena_base = resident_end;
+  arena_top = pc88va_para_segment(lpTop);
+  pc88va_boot_top = (seg)((ULONG)ram_top * 64UL);
+  if (arena_top <= arena_base || arena_top - arena_base < 3U ||
+      arena_top >= pc88va_boot_top)
+    init_fatal("PC88VA temporary arena");
+  pc88va_boot_mcb = arena_top - 1U;
+  base_seg = LoL->first_mcb = arena_base;
   pc88va_init_mcb(base_seg,
-                  (UWORD)(pc88va_image_mcb - base_seg - 1U),
+                  (UWORD)(pc88va_boot_mcb - base_seg - 1U),
                   MCB_NORMAL, FREE_PSP);
-  pc88va_init_mcb(pc88va_image_mcb,
-                  (UWORD)(stack_end - image_start),
-                  MCB_NORMAL, 8);
-  pc88va_init_mcb(arena_base,
-                  (UWORD)(pc88va_resident_mcb - arena_base - 1U),
-                  MCB_NORMAL, FREE_PSP);
-  pc88va_init_mcb(pc88va_resident_mcb, resident_paras,
-                  MCB_NORMAL, 8);
-  pc88va_init_mcb(pc88va_suffix_mcb,
-                  (UWORD)(arena_limit - resident_end - 1U),
-                  MCB_LAST, FREE_PSP);
-  pc88va_mcb_top = arena_limit;
+  pc88va_init_mcb(pc88va_boot_mcb,
+                  (UWORD)(pc88va_boot_top - arena_top), MCB_LAST, 8);
+  pc88va_mcb_top = pc88va_boot_mcb;
 #else
   base_seg = LoL->first_mcb = FP_SEG(AlignParagraph((BYTE FAR *) DynLast() + 0x0f));
 #endif
@@ -509,9 +483,6 @@ void PreConfig2(void)
 void PostConfig(void)
 {
   sfttbl FAR *sp;
-#if defined(PC88VA)
-  seg arena_limit;
-#endif
 
   /* We could just have loaded FDXMS or HIMEM */
   if (HMAState == HMA_REQ && MoveKernelToHMA())
@@ -530,27 +501,7 @@ void PostConfig(void)
     LoL->lastdrive = LoL->nblkdev;
 
 #if defined(PC88VA)
-  /*
-   * Once PostConfig starts replacing the temporary pre-MCB buffers, extend
-   * the terminal MCB only to the active resident boundary.  Do not reclaim
-   * the buffers while their callers can still reference them.
-   */
-  arena_limit = (seg)(ram_top * 64U);
-  if (CurrentKernelSegment != 0 && CurrentKernelSegment != 0xffffU &&
-      CurrentKernelSegment > pc88va_mcb_top &&
-      CurrentKernelSegment < arena_limit)
-    arena_limit = (seg)CurrentKernelSegment;
-
-  if (arena_limit < pc88va_mcb_top)
-    init_fatal("PC88VA arena moved");
-  if (arena_limit > pc88va_mcb_top)
-  {
-    if (pc88va_suffix_mcb != 0)
-      para2far(pc88va_suffix_mcb)->m_size += arena_limit - pc88va_mcb_top;
-    else
-      para2far(base_seg)->m_size += arena_limit - pc88va_mcb_top;
-    pc88va_mcb_top = arena_limit;
-  }
+  /* Temporary buffers remain reserved until the resident P_0 handoff. */
 #if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
   pc88va_m13_diag_arena(base_seg, pc88va_mcb_top,
                         (unsigned short)CurrentKernelSegment,
@@ -608,6 +559,11 @@ VOID configDone(VOID)
 
   if (HMAState != HMA_DONE)
   {
+#if defined(PC88VA)
+    /* Already placed in the final low resident hull before Dyn allocation. */
+    if (CurrentKernelSegment != m13_layout.resident_text_segment)
+      init_fatal("PC88VA resident moved");
+#else
     mcb FAR *p;
     unsigned short kernel_seg;
     unsigned short hma_paras = (HMAFree+0xf)/16;
@@ -625,6 +581,7 @@ VOID configDone(VOID)
     kernel_seg += hma_paras + 1;
 
     DebugPrintf(("kernel is low, start alloc at %x", kernel_seg));
+#endif
   }
 
   /* The standard handles should be reopened here, because
@@ -2034,6 +1991,18 @@ void FAR * KernelAllocPara(size_t nPara, char type, char *name, int mode)
     start = LoL->first_mcb;
   }
 
+#if defined(PC88VA)
+  /* Check the payload and sub-MCB before creating any metadata. The first
+     system-block split also consumes a paragraph for its new free header. */
+  if (!mode && (base < start || base >= pc88va_mcb_top ||
+      para2far(base)->m_psp != FREE_PSP ||
+      para2far(base)->m_type != MCB_NORMAL ||
+      (ULONG)nPara + 1UL + (base == start ? 1UL : 0UL) >
+        para2far(base)->m_size ||
+      (ULONG)base + para2far(base)->m_size + 1UL > pc88va_mcb_top))
+    init_fatal("PC88VA allocation bounds");
+#endif
+
   /* create the special DOS data MCB if it doesn't exist yet */
   DebugPrintf(("kernelallocpara: %x %x %x %c %d\n", start, base, nPara, type, mode));
 
@@ -2068,11 +2037,23 @@ void FAR * KernelAlloc(size_t nBytes, char type, int mode)
 {
   void FAR *p;
   size_t nPara = (nBytes + 15)/16;
+#if defined(PC88VA)
+  nPara = (size_t)(((ULONG)nBytes + 15UL) / 16UL);
+#endif
 
   if (LoL->first_mcb == 0)
   {
     /* prealloc */
+#if defined(PC88VA)
+    ULONG low = (ULONG)CurrentKernelSegment + (HMAFree + 15UL) / 16UL;
+    UWORD top = pc88va_para_segment(lpTop);
+    if (CurrentKernelSegment == 0 || top > (ULONG)ram_top * 64UL ||
+        low + nPara + 2UL >= top)
+      init_fatal("PC88VA early allocation");
+    lpTop = MK_FP(top - nPara, 0);
+#else
     lpTop = MK_FP(FP_SEG(lpTop) - nPara, FP_OFF(lpTop));
+#endif
     p = AlignParagraph(lpTop);
   }
   else

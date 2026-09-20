@@ -192,13 +192,27 @@ pc88va_mz_validate_core:
 .destination_valid:
     mov [si+MZ_END_LO], ax
     mov [si+MZ_END_HI], dx
-    ; The input file cannot overlap the transformed allocation.
+    ; The ordinary carrier has disjoint source and destination intervals.
+    ; The low-staging carrier is a deliberate in-place exception: the file
+    ; and load segments are equal, the file starts at offset zero, and the
+    ; transform compacts the body before the bridge executes.
     mov ax, [si+MZ_SOURCE_LO]
     mov dx, [si+MZ_SOURCE_HI]
     mov bx, [si+MZ_SOURCE_END_LO]
     mov cx, [si+MZ_SOURCE_END_HI]
+    mov bp, [si+MZ_FILE_SEGMENT]
+    cmp bp, [si+MZ_LOAD_SEGMENT]
+    jne .check_source_overlap
+    cmp word [si+MZ_FILE_OFFSET], 0
+    jne .overlap
+    mov ax, [si+MZ_FILE_BYTES]
+    cmp ax, [si+MZ_CAPACITY]
+    ja .allocation
+    jmp .source_overlap_done
+.check_source_overlap:
     call pc88va_mz_interval_check
     jc .overlap
+.source_overlap_done:
     mov di, [si+MZ_PROTECTED_PTR]
     mov bp, [si+MZ_PROTECTED_COUNT]
 .protected:

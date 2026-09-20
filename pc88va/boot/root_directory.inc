@@ -13,7 +13,9 @@ cpu 8086
 %endif
 %include "loader_abi.inc"
 
-; DS:SI -> RT_SIZE bytes. AX/CF=result; all other registers/FLAGS preserved.
+; DS:SI -> RT_SIZE bytes.  The stage-2-owned pointer at
+; PC88VA_ROOT_NAME_POINTER selects the 11-byte short name to match.  AX/CF
+; is the result; all other registers/FLAGS are preserved.
 pc88va_root_lookup_core:
     pushf
     push bx
@@ -21,6 +23,7 @@ pc88va_root_lookup_core:
     push dx
     push di
     push es
+    push bp
     cmp si, 65536-RT_SIZE
     ja .contract
     cmp word [si+RT_VERSION], 1
@@ -35,6 +38,11 @@ pc88va_root_lookup_core:
     ja .contract
     cmp word [si+RT_FILE_CAPACITY], 0
     je .contract
+%ifdef PC88VA_ROOT_NAME_POINTER
+    mov bp, [PC88VA_ROOT_NAME_POINTER]
+    cmp bp, 65536-11
+    ja .contract
+%endif
     mov ax, [si+RT_ENTRIES]
     or ax, ax
     jz .contract
@@ -73,6 +81,26 @@ pc88va_root_lookup_core:
     ; Volume labels, directories and LFN records cannot be the kernel file.
     test byte [es:di+11], 0x18
     jnz .next
+%ifdef PC88VA_ROOT_NAME_POINTER
+    mov ax, [es:di]
+    cmp ax, [ds:bp]
+    jne .next
+    mov ax, [es:di+2]
+    cmp ax, [ds:bp+2]
+    jne .next
+    mov ax, [es:di+4]
+    cmp ax, [ds:bp+4]
+    jne .next
+    mov ax, [es:di+6]
+    cmp ax, [ds:bp+6]
+    jne .next
+    mov ax, [es:di+8]
+    cmp ax, [ds:bp+8]
+    jne .next
+    mov al, [es:di+10]
+    cmp al, [ds:bp+10]
+    jne .next
+%else
     cmp word [es:di], 'KE'
     jne .next
     cmp word [es:di+2], 'RN'
@@ -85,6 +113,7 @@ pc88va_root_lookup_core:
     jne .next
     cmp byte [es:di+10], 'S'
     jne .next
+%endif
     cmp word [si+RT_FOUND], 0
     jne .duplicate
     test byte [es:di+11], 0xc0
@@ -135,6 +164,7 @@ pc88va_root_lookup_core:
 .capacity:
     mov ax, ROOT_CAPACITY
 .restore:
+    pop bp
     pop es
     pop di
     pop dx

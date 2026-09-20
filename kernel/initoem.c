@@ -41,7 +41,8 @@ static BYTE *RcsId =
 #if defined(PC88VA)
 
 /* PC-88VA has no IBM-PC BDA or INT 12h memory-size contract.  The resident
-   machine adapter supplies a bounded conventional-memory value instead. */
+   machine adapter reads the BIOS main-memory selection from backup RAM and
+   returns the decoded conventional-memory ceiling in KiB. */
 extern unsigned FAR ASMPASCAL pc88va_memory_kb(void);
 
 unsigned init_oem(void)

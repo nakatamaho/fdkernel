@@ -82,6 +82,48 @@ STATIC COUNT joinMCBs(seg para)
   return SUCCESS;
 }
 
+#if defined(PC88VA)
+extern UWORD pc88va_boot_mcb, pc88va_boot_top;
+
+/* Called once, on the permanent P_0 stack, after copying its configuration.
+   No initialization code or early-buffer pointer may survive this barrier. */
+COUNT pc88va_release_boot_memory(void)
+{
+  seg cur = first_mcb;
+  seg previous = 0;
+  mcb FAR *p;
+  ULONG next;
+  ULONG limit = (ULONG)pc88va_boot_mcb << 4;
+  ULONG buffers = ((ULONG)FP_SEG(firstbuf) << 4) + FP_OFF(firstbuf);
+  ULONG cds = ((ULONG)FP_SEG(CDSp) << 4) + FP_OFF(CDSp);
+
+  if (pc88va_boot_mcb == 0 || _SS != FP_SEG((UWORD FAR *)&first_mcb) ||
+      buffers + (ULONG)LoL_nbuffers *
+        (sizeof(struct buffer) - BUFFERSIZE + maxsecsize) > limit ||
+      cds + (ULONG)lastdrive * sizeof(struct cds) > limit)
+    return DE_MCBDESTRY;
+  while (cur < pc88va_boot_mcb)
+  {
+    p = para2far(cur);
+    next = (ULONG)cur + p->m_size + 1UL;
+    if (p->m_type != MCB_NORMAL || next > pc88va_boot_mcb)
+      return DE_MCBDESTRY;
+    previous = cur;
+    cur = (seg)next;
+  }
+  p = para2far(cur);
+  if (cur != pc88va_boot_mcb || p->m_type != MCB_LAST || p->m_psp != 8 ||
+      (ULONG)cur + p->m_size + 1UL != pc88va_boot_top)
+    return DE_MCBDESTRY;
+  if (DosMemFree(cur) != SUCCESS)
+    return DE_MCBDESTRY;
+  pc88va_boot_mcb = 0;
+  if (previous != 0 && mcbFree(para2far(previous)))
+    return joinMCBs(previous);
+  return SUCCESS;
+}
+#endif
+
 /*
  * Return a normalized far pointer
  */

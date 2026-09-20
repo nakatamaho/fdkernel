@@ -18,7 +18,12 @@ cpu 8086
 ; one megabyte or more; placing this code in the dedicated CODE segment keeps
 ; the validated SS:CS relationship while the CON dispatch table remains in
 ; LGROUP.
+%ifdef PC88VA_M13
+%include "kernel/m13_segments.inc"
+segment M13_PLATFORM_TEXT
+%else
 segment _TEXT class=CODE public use16
+%endif
 extern pc88va_console_putc_
 %endif
 

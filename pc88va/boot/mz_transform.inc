@@ -17,6 +17,45 @@ pc88va_mz_transform_core:
     or ax, ax
     jnz .restore
     cld
+    mov ax, [si+MZ_FILE_SEGMENT]
+    cmp ax, [si+MZ_LOAD_SEGMENT]
+    jne .copy_to_allocation
+    cmp word [si+MZ_FILE_OFFSET], 0
+    jne .restore_contract
+    ; Low staging mode: remove the MZ header in place.  The destination starts
+    ; below the source, so a forward copy is the overlap-safe direction.  The
+    ; bridge then runs at the staging segment and expands the resident image
+    ; elsewhere.
+    ; BP addresses SS by default on 8086.  Read the context through SI while
+    ; DS still names the stage-2 data segment, then retain SI in BP across the
+    ; temporary file-segment switch.
+    mov cx, [si+MZ_BODY_BYTES]
+    mov dx, [si+MZ_HEADER_BYTES]
+    mov bp, si
+    push ds
+    mov ds, ax
+    mov es, ax
+    mov si, dx
+    xor di, di
+    rep movsb
+    ; Restore the context data segment before reading the remaining MZ
+    ; fields.  BP is an offset in the caller's DS, not in the file segment
+    ; that was selected for the overlapping backward copy.
+    pop ds
+    mov si, bp
+    mov es, [si+MZ_LOAD_SEGMENT]
+    mov di, [si+MZ_BODY_BYTES]
+    mov cx, [si+MZ_ALLOC_BYTES]
+    sub cx, di
+    xor ax, ax
+    rep stosb
+    mov word [si+MZ_TRANSFORMED], 1
+    xor ax, ax
+    jmp .restore
+.restore_contract:
+    mov ax, MZ_CONTRACT
+    jmp .restore
+.copy_to_allocation:
     mov es, [si+MZ_LOAD_SEGMENT]
     xor di, di
     mov cx, [si+MZ_BODY_BYTES]

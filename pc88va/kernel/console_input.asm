@@ -15,7 +15,12 @@ cpu 8086
 %endif
 
 %ifndef M11_FLAT_TEST
+%ifdef PC88VA_M13
+%include "kernel/m13_segments.inc"
+segment M13_PLATFORM_TEXT
+%else
 segment _TEXT class=CODE public use16
+%endif
 extern pc88va_m10_state_
 extern pc88va_console_putc_
 %endif

@@ -39,6 +39,37 @@ class BuildLoaderTests(unittest.TestCase):
             with self.assertRaises(ProfileError):
                 validate_overlay(value)
 
+    def test_bootstrap_exact_in_place_low_staging_alias_is_lifetime_safe(self):
+        value = overlay()
+        value["layout"]["regions"]["kernel_file"] = [0x30000, 0x3FFF0]
+        value["layout"]["regions"]["kernel_allocation"] = [0x30000, 0x3FFF0]
+        value["bootstrap"]["image_segment"] = 0x3000
+        self.assertEqual(validate_overlay(value), value)
+
+        partial = copy.deepcopy(value)
+        partial["layout"]["regions"]["kernel_allocation"] = [0x34000, 0x43FF0]
+        with self.assertRaises(ProfileError):
+            validate_overlay(partial)
+
+        shifted = copy.deepcopy(value)
+        shifted["layout"]["regions"]["kernel_file"] = [0x30010, 0x3FFF0]
+        shifted["layout"]["regions"]["kernel_allocation"] = [0x30010, 0x3FFF0]
+        with self.assertRaises(ProfileError):
+            validate_overlay(shifted)
+
+    def test_bootstrap_exact_allocation_alias_is_safe_with_separate_1340_file(self):
+        value = overlay()
+        value["bootstrap"]["image_segment"] = 0x3000
+        value["layout"]["regions"]["kernel_allocation"] = [0x30000, 0x3FFF0]
+        # The file is read first at 1340:0000; the MZ transform then copies
+        # it into the allocation that reuses the now-dead bootstrap bytes.
+        self.assertEqual(validate_overlay(value), value)
+
+        partial = copy.deepcopy(value)
+        partial["layout"]["regions"]["kernel_allocation"] = [0x30010, 0x3FFF0]
+        with self.assertRaises(ProfileError):
+            validate_overlay(partial)
+
     def test_callback_cannot_import_files_or_host_metadata(self):
         for content in ('%include "secret.inc"', 'incbin "secret.bin"', '%define BAD 1',
                         'global other', 'db __DATE__', 'call foreign', 'bad:'):

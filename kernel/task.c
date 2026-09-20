@@ -33,6 +33,7 @@
 #endif
 #if defined(PC88VA)
 extern VOID init_fatal(BYTE * err_msg);
+extern COUNT pc88va_release_boot_memory(void);
 #endif
 
 #ifdef VERSION_STRINGS
@@ -932,6 +933,8 @@ VOID ASMCFUNC P_0(struct config FAR *Config)
   if (SHELL_CAPACITY <= SHELL_RETRY_OVERHEAD ||
       (unsigned)(endp - Shell) > SHELL_CAPACITY - SHELL_RETRY_OVERHEAD)
     init_fatal("Shell command too long");
+  if (pc88va_release_boot_memory() != SUCCESS)
+    init_fatal("PC88VA boot lifetime");
 #endif
 
   for ( ; ; )   /* endless shell load loop - reboot or shut down to exit it! */

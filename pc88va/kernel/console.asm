@@ -13,6 +13,9 @@ bits 16
 
 %ifndef CONSOLE_FLAT_TEST
 %include "../kernel/segs.inc"
+%ifdef PC88VA_M13
+%include "kernel/m13_segments.inc"
+%endif
 ; DOS-C's generic IO dispatcher consumes this table.  The table is PC-88VA
 ; owned, while DOS semantics (request packets and status bits) remain in the
 ; common io.asm implementation.
@@ -118,7 +121,12 @@ CommonNdCheck:
                 jz CommonNdReady
                 jmp far _IOErrorExit
 CommonNdReady:
-                lds bx, [cs:_ReqPktPtr]
+                ; The packet pointer belongs to the common dispatcher's
+                ; LGROUP, not this platform code frame.  DS is disposable
+                ; here: _IOExit restores the dispatcher's saved registers.
+                mov bx, seg _ReqPktPtr
+                mov ds, bx
+                lds bx, [_ReqPktPtr]
                 cmp byte [bx+2], 6
                 je CommonNdReadyDone
                 mov al, [cs:pc88va_m11_character_]

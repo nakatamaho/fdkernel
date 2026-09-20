@@ -39,13 +39,44 @@ def synthetic_profile():
     }
 
 
+def low_staging_profile():
+    profile = synthetic_profile()
+    profile["regions"].update({
+        "scratch": [0x36000, 0x3a000],
+        "kernel_file": [0x26000, 0x35ff0],
+        "kernel_allocation": [0x26000, 0x35ff0],
+    })
+    return profile
+
+
 class ProfileTests(unittest.TestCase):
     def test_synthetic_layout_and_deterministic_definitions(self):
         profile = synthetic_profile()
         result = definitions(profile)
         self.assertEqual((result["S2_FAT_OFFSET"], result["S2_MIRROR_OFFSET"],
                           result["S2_ROOT_OFFSET"], result["S2_BITMAP_OFFSET"]), (512, 1024, 1536, 2560))
+        self.assertEqual(result["S2_CONFIG_OFFSET"], 3072)
+        self.assertEqual(result["S2_CONFIG_CAPACITY"], 4096)
+        self.assertEqual(result["S2_CONFIG_SEGMENT"], 0x2800)
+        self.assertEqual(result["PC88VA_LOW_STAGING_SEGMENT"], 0x4800)
+        self.assertEqual(result["PC88VA_INITIAL_LOAD_SEGMENT"], 0x4800)
+        self.assertEqual(result["S2_KERNEL_IN_PLACE"], 0)
         self.assertEqual(nasm_definitions(profile), nasm_definitions(copy.deepcopy(profile)))
+
+    def test_low_staging_alias_is_explicit_and_fits_256k(self):
+        profile = low_staging_profile()
+        result = definitions(profile)
+        self.assertEqual(result["PC88VA_LOW_STAGING_SEGMENT"], 0x2600)
+        self.assertEqual(result["PC88VA_INITIAL_LOAD_SEGMENT"], 0x2600)
+        self.assertEqual(result["S2_KERNEL_IN_PLACE"], 1)
+        self.assertLessEqual(profile["regions"]["kernel_file"][1], 0x40000)
+        self.assertEqual(profile["regions"]["kernel_file"], profile["regions"]["kernel_allocation"])
+
+    def test_partial_kernel_alias_is_rejected(self):
+        profile = low_staging_profile()
+        profile["regions"]["kernel_allocation"] = [0x25ff0, 0x35ff0]
+        with self.assertRaises(ProfileError):
+            definitions(profile)
 
     def test_closed_schema_and_privacy_class(self):
         for change in ({"extra": 1}, {"schema_version": True}, {"profile_class": "unspecified"}):
@@ -96,28 +127,42 @@ class Stage2Tests(unittest.TestCase):
         cls.profile = synthetic_profile()
         cls.temporary = tempfile.TemporaryDirectory(prefix="pc88va-m08-stage2-")
         root = pathlib.Path(cls.temporary.name)
-        profile = root / "profile.inc"
-        # Only the ROM-free host fixture supplies disk results at this callback.
-        profile.write_text(nasm_definitions(cls.profile) +
-                           "%macro PC88VA_FIRMWARE_READ_ONE 0\nretf\n%endmacro\n")
-        blobs = []
-        for number in (1, 2):
-            target = root / (str(number) + ".bin")
-            subprocess.run(["nasm", "-f", "bin", "-DPC88VA", "-I", str(BOOT) + "/",
-                            "-p", str(profile), "-o", str(target), str(BOOT / "stage2.asm")],
-                           check=True, capture_output=True)
-            blobs.append(target.read_bytes())
-        if blobs[0] != blobs[1]:
-            raise AssertionError("Two stage-2 builds differ")
-        cls.code = blobs[0]
+        def assemble(profile_value, stem):
+            profile = root / (stem + "-profile.inc")
+            # Only the ROM-free host fixture supplies disk results at this callback.
+            profile.write_text(nasm_definitions(profile_value) +
+                               "%macro PC88VA_FIRMWARE_READ_ONE 0\nretf\n%endmacro\n")
+            blobs = []
+            for number in (1, 2):
+                target = root / (stem + str(number) + ".bin")
+                subprocess.run(["nasm", "-f", "bin", "-DPC88VA", "-I", str(BOOT) + "/",
+                                "-p", str(profile), "-o", str(target), str(BOOT / "stage2.asm")],
+                               check=True, capture_output=True)
+                blobs.append(target.read_bytes())
+            if blobs[0] != blobs[1]:
+                raise AssertionError("Two stage-2 builds differ")
+            return blobs[0]
+
+        cls.code = assemble(cls.profile, "stage2-")
         cls.symbols = stage2_symbols(cls.code)
+        cls.low_profile = low_staging_profile()
+        cls.low_code = assemble(cls.low_profile, "stage2-low-")
+        cls.low_symbols = stage2_symbols(cls.low_code)
 
     @classmethod
     def tearDownClass(cls):
         cls.temporary.cleanup()
 
-    def execute(self, kernel=None, results=None, wrong_base=False, clobber=False):
+    def execute(self, kernel=None, results=None, wrong_base=False, clobber=False,
+                profile=None, code=None, symbols=None):
+        profile = self.profile if profile is None else profile
         image = carrier() if kernel is None else kernel
+        if profile is self.low_profile:
+            # The low carrier's bootstrap far frame must live in its rounded
+            # zero-filled tail, not over the compacted body at 0400h.
+            image = bytearray(image)
+            struct.pack_into("<H", image, 16, ((len(image) - 32 + 15) // 16) * 16)
+            image = bytes(image)
         count = (len(image) + 511) // 512
         clusters = ([2, 4, 3] + list(range(5, count + 2)))[:count]
         table = bytearray(512)
@@ -129,14 +174,16 @@ class Stage2Tests(unittest.TestCase):
                    3: directory[:512], 4: directory[512:]}
         for index, cluster in enumerate(clusters):
             sectors[cluster + 3] = image[index * 512:(index + 1) * 512].ljust(512, b"\0")
-        regions = self.profile["regions"]
+        code = self.code if code is None else code
+        symbols = self.symbols if symbols is None else symbols
+        regions = profile["regions"]
         base = regions["stage2"][0] + (0x1000 if wrong_base else 0)
         destination = regions["kernel_allocation"][0]
         header = struct.unpack_from("<14H", image)
         entry_address = destination + header[11] * 16 + header[10]
         machine = Uc(UC_ARCH_X86, UC_MODE_16)
         machine.mem_map(0, 0x110000)
-        machine.mem_write(base, self.code)
+        machine.mem_write(base, code)
         machine.mem_write(destination, bytes([0xa5]) * (regions["kernel_allocation"][1] - destination))
         machine.reg_write(UC_X86_REG_CS, base // 16)
         machine.reg_write(UC_X86_REG_DS, 0xdead)
@@ -157,14 +204,14 @@ class Stage2Tests(unittest.TestCase):
             writes.append((address, size, value))
 
         def hook(cpu, address, size, _):
-            if address in (entry_address, base + self.symbols["failure"]):
+            if address in (entry_address, base + symbols["failure"]):
                 reached.append("entry" if address == entry_address else "failure")
                 cpu.emu_stop()
                 return
-            if address != base + self.symbols["adapter"]:
+            if address != base + symbols["adapter"]:
                 return
             self.assertEqual(cpu.reg_read(UC_X86_REG_DS), base // 16)
-            request = struct.unpack("<24H", cpu.mem_read(base + self.symbols["disk"], 48))
+            request = struct.unpack("<24H", cpu.mem_read(base + symbols["disk"], 48))
             self.assertEqual(request[10], 0x321)
             lba = request[21]
             reads.append(lba)
@@ -196,7 +243,12 @@ class Stage2Tests(unittest.TestCase):
             }
             for register, value in expected.items():
                 self.assertEqual(machine.reg_read(register), value)
-            self.assertEqual(bytes(machine.mem_read(regions["kernel_file"][0], len(image))), image)
+            if profile is self.low_profile:
+                header_bytes = header[4] * 16
+                body = image[header_bytes:]
+                self.assertEqual(bytes(machine.mem_read(regions["kernel_file"][0], len(body))), body)
+            else:
+                self.assertEqual(bytes(machine.mem_read(regions["kernel_file"][0], len(image))), image)
             body = image[header[4] * 16:]
             allocation = ((len(body) + 15) // 16 + header[5]) * 16
             transformed = bytearray(body + bytes(allocation - len(body)))
@@ -209,6 +261,11 @@ class Stage2Tests(unittest.TestCase):
 
     def test_stage2_entry_to_kernel_entry(self):
         outcome, reads, _ = self.execute()
+        self.assertEqual((outcome, reads), ("entry", [0, 1, 2, 3, 4, 5, 7, 6]))
+
+    def test_low_staging_stage2_entry_to_kernel_entry(self):
+        outcome, reads, _ = self.execute(profile=self.low_profile, code=self.low_code,
+                                         symbols=self.low_symbols)
         self.assertEqual((outcome, reads), ("entry", [0, 1, 2, 3, 4, 5, 7, 6]))
 
     def test_no_incoming_stack_or_data_segment_dependency(self):

@@ -11,12 +11,22 @@ org 0
 %if PC88VA_PROFILE_VERSION != 1
 %error Unsupported loader profile
 %endif
+%ifndef PC88VA_LOW_STAGING_SEGMENT
+%error A validated low staging segment is required
+%endif
+%ifndef PC88VA_INITIAL_LOAD_SEGMENT
+%error A validated initial load segment is required
+%endif
+%if PC88VA_INITIAL_LOAD_SEGMENT != S2_KERNEL_FILE_SEGMENT
+%error Low staging segment must match the owned kernel-file interval
+%endif
 %ifndef PC88VA
 %error PC88VA selector is required
 %endif
 %ifnmacro PC88VA_FIRMWARE_READ_ONE 0
 %error A qualified firmware callback or explicit ROM-free fixture is required
 %endif
+%define PC88VA_ROOT_NAME_POINTER pc88va_stage2_root_name_pointer
 
 pc88va_stage2_entry:
     ; Stage 1 provides CS at the image base, DX=opaque drive, BX=call FLAGS.
@@ -49,6 +59,7 @@ pc88va_stage2_adapter:
 %include "fat12.inc"
 %include "root_directory.inc"
 %include "file_load.inc"
+%include "config_probe.inc"
 %include "loader_handoff.inc"
 %include "boot_load.inc"
 
@@ -75,30 +86,54 @@ pc88va_stage2_fat:
 pc88va_stage2_root:
     dw 1, S2_ROOT_OFFSET, S2_SCRATCH_SEGMENT, 0, S2_ROOT_CAPACITY
     dw 0, S2_KERNEL_FILE_CAPACITY, 0, 0, 0
+pc88va_stage2_root_name_pointer:
+    dw pc88va_stage2_kernel_name
+pc88va_stage2_kernel_name:
+    db 'KERNEL  SYS'
+pc88va_stage2_config_name:
+    db 'CONFIG  SYS'
 pc88va_stage2_file:
     dw 1, pc88va_stage2_disk, pc88va_stage2_fat, pc88va_stage2_root
-    dw 0, S2_KERNEL_FILE_SEGMENT, S2_KERNEL_FILE_CAPACITY, 0, 0
+    dw 0, PC88VA_INITIAL_LOAD_SEGMENT, S2_KERNEL_FILE_CAPACITY, 0, 0
+    dw S2_BOOT_OFFSET, S2_SCRATCH_SEGMENT, S2_SECTOR_BYTES
+    times 9 dw 0
+pc88va_stage2_config_file:
+    dw 1, pc88va_stage2_disk, pc88va_stage2_fat, pc88va_stage2_root
+    dw S2_CONFIG_OFFSET, S2_CONFIG_SEGMENT, S2_CONFIG_CAPACITY, 0, 0
     dw S2_BOOT_OFFSET, S2_SCRATCH_SEGMENT, S2_SECTOR_BYTES
     times 9 dw 0
 pc88va_stage2_mz:
-    dw 1, 0, S2_KERNEL_FILE_SEGMENT, 0
+    dw 1, 0, PC88VA_INITIAL_LOAD_SEGMENT, 0
+%if S2_KERNEL_IN_PLACE
+    dw PC88VA_INITIAL_LOAD_SEGMENT, S2_KERNEL_ALLOCATION_CAPACITY, 256, 0
+%else
     dw S2_KERNEL_ALLOCATION_SEGMENT, S2_KERNEL_ALLOCATION_CAPACITY, 256, 0
+%endif
 %assign S2_PROTECTED_COUNT 0
-%if S2_KERNEL_ALLOCATION_SEGMENT > 0
+%if S2_KERNEL_IN_PLACE
+%assign S2_PROTECTED_COUNT 1
+%elif S2_KERNEL_ALLOCATION_SEGMENT > 0
 %assign S2_PROTECTED_COUNT S2_PROTECTED_COUNT + 1
 %endif
-%if (S2_KERNEL_ALLOCATION_SEGMENT * 16 + S2_KERNEL_ALLOCATION_CAPACITY) < 0x100000
+%if !S2_KERNEL_IN_PLACE && (S2_KERNEL_ALLOCATION_SEGMENT * 16 + S2_KERNEL_ALLOCATION_CAPACITY) < 0x100000
 %assign S2_PROTECTED_COUNT S2_PROTECTED_COUNT + 1
 %endif
     dw pc88va_stage2_protected, S2_PROTECTED_COUNT
     times 17 dw 0
 pc88va_stage2_protected:
     ; Protect everything except the one explicitly owned kernel allocation.
+%if S2_KERNEL_IN_PLACE
+    ; Stage-2, scratch, carrier and final-image lifetimes are checked by the
+    ; placement builder.  During the one-way handoff only the VA low prefix
+    ; remains firmware-owned.
+    dd 0, S2_FIRMWARE_LOW_END
+%else
 %if S2_KERNEL_ALLOCATION_SEGMENT > 0
     dd 0, S2_KERNEL_ALLOCATION_SEGMENT * 16
 %endif
 %if (S2_KERNEL_ALLOCATION_SEGMENT * 16 + S2_KERNEL_ALLOCATION_CAPACITY) < 0x100000
     dd S2_KERNEL_ALLOCATION_SEGMENT * 16 + S2_KERNEL_ALLOCATION_CAPACITY, 0x100000
+%endif
 %endif
 
 ; Project-owned symbol footer: the build/evidence extractor checks these offsets.

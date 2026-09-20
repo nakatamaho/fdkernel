@@ -35,9 +35,21 @@ def validate_overlay(value):
     start = bootstrap["image_segment"]*16+bootstrap["image_offset"]
     if start+bootstrap["loaded_bytes"] > 0x100000:
         raise ProfileError("Initial loaded extent exceeds real-mode memory")
-    for low, high in value["layout"]["regions"].values():
-        if low < start+bootstrap["loaded_bytes"] and start < high:
-            raise ProfileError("Bootstrap lifetime overlaps a later owned region")
+    bootstrap_end = start + bootstrap["loaded_bytes"]
+    regions = value["layout"]["regions"]
+    in_place = regions["kernel_file"] == regions["kernel_allocation"]
+    for name, (low, high) in regions.items():
+        if low < bootstrap_end and start < high:
+            # The PC-88VA boot sector is entered at the qualified bootstrap
+            # segment.  Once stage 1 has transferred to stage 2, that code
+            # and its one-sector image are dead.  A later transformed
+            # allocation may therefore reuse the exact bootstrap interval,
+            # even when the initial file staging interval is separate (the
+            # 1340h -> 3000h split-loader path).  No partial alias is safe.
+            if not ((name == "kernel_allocation" or
+                     (name == "kernel_file" and in_place)) and
+                    low == start and high > bootstrap_end):
+                raise ProfileError("Bootstrap lifetime overlaps a later owned region")
     callback = value["firmware_callback"]
     if not isinstance(callback, str) or len(callback) > 16384:
         raise ProfileError("Firmware callback is not bounded source text")

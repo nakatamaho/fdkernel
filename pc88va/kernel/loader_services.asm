@@ -2,7 +2,12 @@
 ; Open Watcom small-model register-call adapters for the shared M08 cores.
 bits 16
 cpu 8086
+%ifdef PC88VA_M13
+%include "kernel/m13_segments.inc"
+segment M13_PLATFORM_TEXT
+%else
 segment _TEXT class=CODE public use16
+%endif
 global pc88va_disk_read_
 global pc88va_loader_handoff_
 global pc88va_disk_read_marker
