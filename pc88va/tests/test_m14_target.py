@@ -60,6 +60,14 @@ class M14TargetTests(unittest.TestCase):
         makefile = (TARGET / "makefile.m13.wc").read_text(encoding="utf-8")
         self.assertIn("boot/disk_write.inc", makefile)
 
+    def test_va_does_not_use_the_ibm_diskette_parameter_vector(self):
+        dsk = (TARGET.parent / "kernel/dsk.c").read_text(encoding="utf-8")
+        before, after = dsk.split("getvec(0x1e)", 1)
+        guard = before.rsplit("#if", 1)[1]
+        self.assertTrue(guard.startswith(" !defined(PC88VA)"))
+        self.assertNotIn("#endif", guard)
+        self.assertIn("fl_reset(driveno);", after.split("#endif", 1)[0])
+
 
 if __name__ == "__main__":
     unittest.main()

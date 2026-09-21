@@ -117,8 +117,16 @@ pc88va_kernel_firmware_read_one_:
         mov cx, [si+18]
         retf
 .firmware_error:
-        mov ax, 5
+        ; The core stores the callback's status separately from DISK_FIRMWARE.
+        ; Preserve it for the DOS adapter instead of turning every read error
+        ; into the numeric status used for write protection.
+        mov al, ah
+        xor ah, ah
         xor cx, cx
+        or ax, ax
+        jnz .firmware_error_return
+        mov ax, 0ffffh             ; CF-only failure: unknown device status
+.firmware_error_return:
         retf
 
 ; PC-88VA data-write callback.  AH=82h is the VA write-sector service.

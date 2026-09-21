@@ -1010,6 +1010,10 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
   /* optionally change from A: to B: or back */
   play_dj(pddt);
 
+#if !defined(PC88VA)
+  /* The INT 1Eh diskette parameter table belongs to the IBM-PC BIOS ABI.
+     The VA adapter supplies its geometry in each native request and must
+     neither write through that vector nor reset the native BIOS here. */
   if (!hd(pddt->ddt_descflags))
   {
     UBYTE FAR  *int1e_ptr = (UBYTE FAR *)getvec(0x1e);
@@ -1021,6 +1025,7 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
       fl_reset(driveno);
     }
   }
+#endif
         
 /*    
     if (LBA_address+totaltodo > pddt->total_sectors)

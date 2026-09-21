@@ -354,8 +354,8 @@ FL_READ:
         ; request record rather than relying on the copied-byte count.
         mov si, [cs:pc88va_m12_request_+RD_LBA]
         inc si
-        add di, 1024
-        jc .bad
+        ; REP MOVSW already advanced DI by exactly one sector. Advancing it
+        ; again would leave a gap and overwrite beyond the caller's buffer.
         dec cx
         jnz .next
         xor ax, ax
