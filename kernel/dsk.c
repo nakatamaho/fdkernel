@@ -1135,7 +1135,11 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
       if (error_code == 0)
         break;
 
+#if !defined(PC88VA)
+      /* VA transfer recovery belongs to its resident adapter. Do not add
+         a common BIOS reset after that adapter returns a final error. */
       fl_reset(driveno);
+#endif
 
     }                           /* end of retries */
 

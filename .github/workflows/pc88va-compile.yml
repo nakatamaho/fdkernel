@@ -31,7 +31,7 @@ jobs:
       - name: Install ROM-free execution QA dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends nasm
+          sudo apt-get install --yes --no-install-recommends nasm gcc
           python3 -m pip install --only-binary=:all: --require-hashes \
             --target "$RUNNER_TEMP/m08-qa" -r pc88va/tests/m08-requirements.txt
 
