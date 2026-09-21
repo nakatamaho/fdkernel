@@ -609,6 +609,12 @@ PSP_PARENT      equ     16h
 PSP_USERSP      equ     2eh
 PSP_USERSS      equ     30h
 
+%ifdef PC88VA
+; The medium-model C caller supplies a far return address.
+CRITICAL_ARG_BASE equ   6
+%else
+CRITICAL_ARG_BASE equ   4
+%endif
 
 
 ;
@@ -624,7 +630,11 @@ _CriticalError:
                 je      CritErr05               ; Jump if equal
 
                 mov     ax,FAIL
+%ifdef PC88VA
+                retf
+%else
                 retn
+%endif
                 ;
                 ; Do local error processing
                 ;
@@ -639,15 +649,15 @@ CritErr05:
                 ;
                 ; Get parameters
                 ;
-                mov     ah,byte [bp+4]      ; nFlags
-                mov     al,byte [bp+6]      ; nDrive
-                mov     di,word [bp+8]      ; nError
+                mov     ah,byte [bp+CRITICAL_ARG_BASE]      ; nFlags
+                mov     al,byte [bp+CRITICAL_ARG_BASE+2]    ; nDrive
+                mov     di,word [bp+CRITICAL_ARG_BASE+4]    ; nError
                 ;
                 ;       make cx:si point to dev header
                 ;       after registers restored use bp:si
                 ;
-                mov     si,word [bp+10]     ; lpDevice Offset
-                mov     cx,word [bp+12]     ; lpDevice segment
+                mov     si,word [bp+CRITICAL_ARG_BASE+6]    ; lpDevice Offset
+                mov     cx,word [bp+CRITICAL_ARG_BASE+8]    ; lpDevice segment
                 ;
                 ; Now save real ss:sp and retry info in internal stack
                 ;
@@ -697,7 +707,7 @@ CritErr05:
                 pop     word [es:PSP_USERSP]
                 pop     word [es:PSP_USERSS]
                 mov     bp, sp
-                mov     ah, byte [bp+4+4]       ; restore old AH from nFlags
+                mov     ah, byte [bp+CRITICAL_ARG_BASE+4] ; nFlags, below saved SI/DI
                 sti                             ; Enable interrupts
                 ;
                 ; clear flags
@@ -743,7 +753,11 @@ CritErrExit:
                 pop     di
                 pop     si
                 pop     bp
+%ifdef PC88VA
+                retf
+%else
                 ret
+%endif
 
                 ;
                 ; Abort processing.
