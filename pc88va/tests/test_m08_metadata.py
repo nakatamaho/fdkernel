@@ -49,9 +49,14 @@ class MetadataTests(unittest.TestCase):
                     "fat12", "root_directory", "file_load"]
         if cls.handoff:
             includes += ["loader_handoff", "boot_load"]
+        # This metadata/handoff fixture has no optional CONFIG.SYS stage.
+        # Bind that new stage explicitly to its absent-selector outcome;
+        # selector parsing and ownership are not qualified by this fixture.
+        config_stage = ('\npc88va_stage2_config_bootstrap:\n'
+                        'xor ax, ax\nret\n') if cls.handoff else ''
         source.write_text('bits 16\ncpu 8086\norg 0\n' + start +
                           ''.join('%include "' + name + '.inc"\n' for name in
-                                  includes))
+                                  includes) + config_stage)
         outputs = []
         for number in (1, 2):
             target = root / (str(number) + ".bin")

@@ -61,6 +61,8 @@ class ConsoleTests(unittest.TestCase):
                 cursor[0] = 0
             elif ch == 10:
                 cursor[1] += 1
+            elif ch == 8:
+                cursor[0] = max(0, cursor[0] - 1)
             else:
                 self.assertTrue(0x20 <= ch <= 0x7e)
                 display[cursor[1]][cursor[0]] = ch
@@ -111,8 +113,13 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(result[1], bytes(chars))
 
     def test_unsupported_controls_never_call_bios(self):
-        chars = [c for c in range(256) if c not in (10, 13) and not 0x20 <= c <= 0x7e]
+        # The current shared adapter includes M13's editing support; immutable
+        # historical M09 acceptance must still use its own original checkout.
+        chars = [c for c in range(256) if c not in (8, 10, 13) and not 0x20 <= c <= 0x7e]
         self.assertEqual(self.execute(chars)[:2], ([0xffff] * len(chars), b''))
+
+    def test_backspace_is_forwarded_by_current_adapter(self):
+        self.assertEqual(self.execute([8])[:2], ([0], b'\x08'))
 
     def test_wide_character_rejected(self):
         self.assertEqual(self.execute([0x120, 0xffff])[:2], ([0xffff, 0xffff], b''))

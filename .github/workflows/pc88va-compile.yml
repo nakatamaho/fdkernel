@@ -8,12 +8,15 @@ on:
       - topic/m08-pc88va-disk-loader-handoff
       - topic/m09-pc88va-early-console-output
       - topic/m10-pc88va-machine-services-init
+      - 'topic/m14-*'
     paths:
       - "pc88va/**"
+      - "kernel/dsk.c"
       - ".github/workflows/pc88va-compile.yml"
   pull_request:
     paths:
       - "pc88va/**"
+      - "kernel/dsk.c"
       - ".github/workflows/pc88va-compile.yml"
 
 jobs:
