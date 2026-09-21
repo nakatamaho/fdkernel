@@ -312,8 +312,7 @@ FL_READ:
         call pc88va_validate_buffer_request
         jc .bad
 .next:
-        call pc88va_validate_buffer_1024
-        jc .bad
+        ; The full extent was validated before any sector transfer.
         mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_LBA], si
         mov word [cs:pc88va_m12_request_+RD_COUNT], 1
@@ -537,8 +536,7 @@ FL_WRITE:
         call pc88va_validate_buffer_request
         jc .write_bad
 .write_next:
-        call pc88va_validate_buffer_1024
-        jc .write_bad
+        ; The full extent was validated before any sector transfer.
         push cx
         push si
         push di
@@ -657,8 +655,7 @@ FL_VERIFY:
         call pc88va_validate_buffer_request
         jc .verify_bad
 .verify_next:
-        call pc88va_validate_buffer_1024
-        jc .verify_bad
+        ; The full extent was validated before any sector transfer.
         mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_LBA], si
         mov word [cs:pc88va_m12_request_+RD_COUNT], 1
