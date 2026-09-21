@@ -43,12 +43,15 @@ def validate_overlay(value):
             # The PC-88VA boot sector is entered at the qualified bootstrap
             # segment.  Once stage 1 has transferred to stage 2, that code
             # and its one-sector image are dead.  A later transformed
-            # allocation may therefore reuse the exact bootstrap interval,
+            # allocation may therefore reuse the complete bootstrap interval,
             # even when the initial file staging interval is separate (the
-            # 1340h -> 3000h split-loader path).  No partial alias is safe.
+            # 1340h -> 3000h split-loader path).  The allocation may begin
+            # below the bootstrap, provided it fully contains the now-dead
+            # bootstrap extent; a partial alias remains unsafe.
+            complete_bootstrap_alias = low <= start and high >= bootstrap_end
             if not ((name == "kernel_allocation" or
                      (name == "kernel_file" and in_place)) and
-                    low == start and high > bootstrap_end):
+                    complete_bootstrap_alias):
                 raise ProfileError("Bootstrap lifetime overlaps a later owned region")
     callback = value["firmware_callback"]
     if not isinstance(callback, str) or len(callback) > 16384:

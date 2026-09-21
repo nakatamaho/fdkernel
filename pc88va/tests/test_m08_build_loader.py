@@ -46,6 +46,12 @@ class BuildLoaderTests(unittest.TestCase):
         value["bootstrap"]["image_segment"] = 0x3000
         self.assertEqual(validate_overlay(value), value)
 
+        low_staging = copy.deepcopy(value)
+        low_staging["layout"]["regions"]["scratch"] = [0x37000, 0x3B000]
+        low_staging["layout"]["regions"]["kernel_file"] = [0x27000, 0x36FF0]
+        low_staging["layout"]["regions"]["kernel_allocation"] = [0x27000, 0x36FF0]
+        self.assertEqual(validate_overlay(low_staging), low_staging)
+
         partial = copy.deepcopy(value)
         partial["layout"]["regions"]["kernel_allocation"] = [0x34000, 0x43FF0]
         with self.assertRaises(ProfileError):
