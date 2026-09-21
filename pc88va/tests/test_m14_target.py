@@ -33,6 +33,9 @@ class M14TargetTests(unittest.TestCase):
             self.assertIn(text, core)
         adapter = (TARGET / "kernel/m13_platform.asm").read_text(encoding="utf-8")
         self.assertIn("cmp di, 0xfc00", adapter)
+        self.assertIn("pc88va_validate_buffer_1024", adapter)
+        self.assertIn("add dx, cx\n        jc .write_bad", adapter)
+        self.assertIn("add dx, cx\n        jc .verify_bad", adapter)
         self.assertIn("retf 14", adapter)
 
     def test_va_status_and_change_contract_are_not_silent_success(self):
@@ -42,6 +45,16 @@ class M14TargetTests(unittest.TestCase):
         self.assertIn("mov ax, 3", adapter)
         self.assertIn("mov ax, 80h", adapter)
         self.assertIn("mov ax, 10h", adapter)
+
+    def test_common_media_and_partial_write_boundaries_are_explicit(self):
+        initdisk = (TARGET.parent / "kernel/initdisk.c").read_text(encoding="utf-8")
+        dsk = (TARGET.parent / "kernel/dsk.c").read_text(encoding="utf-8")
+        fatfs = (TARGET.parent / "kernel/fatfs.c").read_text(encoding="utf-8")
+        self.assertIn("return drive == 0 ? DF_CHANGELINE : DF_NOACCESS", initdisk)
+        self.assertIn("rp->r_count > size - start", dsk)
+        self.assertIn("retry_limit = 1", dsk)
+        self.assertIn("count > 1", dsk)
+        self.assertIn("Retaining dirty buffers across that boundary", fatfs)
 
     def test_resident_write_object_dependency_is_explicit(self):
         makefile = (TARGET / "makefile.m13.wc").read_text(encoding="utf-8")

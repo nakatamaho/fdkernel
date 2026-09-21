@@ -1725,8 +1725,18 @@ COUNT media_check(REG struct dpb FAR * dpbp)
     case M_DONT_KNOW:
       /* IBM PCDOS technical reference says to call BLDBPB if */
       /* there are no used buffers                            */
+#if defined(PC88VA)
+      /* AH=09 can conservatively report an unknown door state with the
+         motor stopped.  Retaining dirty buffers across that boundary would
+         allow data for the old medium to be written to a replacement. */
+      if (dirty_buffers(dpbp->dpb_unit))
+        setinvld(dpbp->dpb_unit);
+      else
+        return SUCCESS;
+#else
       if (dirty_buffers(dpbp->dpb_unit))
         return SUCCESS;
+#endif
 
       /* If it definitely changed, don't know (falls through) */
       /* or has been changed, rebuild the bpb.                */

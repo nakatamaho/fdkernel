@@ -840,7 +840,7 @@ STATIC WORD blockio(rqptr rp, ddt * pddt)
   pbpb = hd(pddt->ddt_descflags) ? &pddt->ddt_defbpb : &pddt->ddt_bpb;
   size = (pbpb->bpb_nsize ? pbpb->bpb_nsize : pbpb->bpb_huge);
 
-  if (start >= size || start + rp->r_count > size)
+  if (start >= size || rp->r_count > size - start)
   {
     return 0x0408;
   }
@@ -997,9 +997,11 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
   unsigned char driveno = pddt->ddt_driveno;
 
   int num_retries;
+  unsigned retry_limit;
 
 	UWORD bytes_sector = pddt->ddt_bpb.bpb_nbyte;   /* bytes per sector, usually 512 */
   *transferred = 0;
+  retry_limit = N_RETRY;
   
   /* only low-level format floppies for now ! */
   if (mode == LBA_FORMAT && hd(pddt->ddt_descflags))
@@ -1039,6 +1041,18 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
         count = DMA_max_transfer(buffer, totaltodo);
     }     
 
+#if defined(PC88VA)
+    /* The legacy fl_* ABI has no completed-sector result.  Dispatching one
+       VA sector per common write call keeps r_count exact on an error and
+       prevents the common retry loop from replaying a dirty caller buffer on
+       a newly inserted medium.  The resident VA core still owns its bounded
+       firmware retries. */
+    if ((mode == LBA_WRITE || mode == LBA_WRITE_VERIFY) && count > 1)
+      count = 1;
+    if (mode == LBA_WRITE || mode == LBA_WRITE_VERIFY)
+      retry_limit = 1;
+#endif
+
     if (FP_SEG(buffer) >= 0xa000 || count == 0)
     {
       transfer_address = DiskTransferBuffer;
@@ -1054,7 +1068,7 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
       transfer_address = buffer;
     }
 
-    for (num_retries = 0; num_retries < N_RETRY; num_retries++)
+    for (num_retries = 0; num_retries < retry_limit; num_retries++)
     {
       if ((pddt->ddt_descflags & DF_LBA) && mode != LBA_FORMAT)
       {

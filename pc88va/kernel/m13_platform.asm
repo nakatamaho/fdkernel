@@ -305,12 +305,13 @@ FL_READ:
         dec dx
         mov si, dx
         add dx, cx
+        jc .bad
         cmp dx, 1280
         ja .bad
         les di, [.buffer]
 .next:
-        cmp di, 0xfc00
-        jae .bad
+        call pc88va_validate_buffer_1024
+        jc .bad
         mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_LBA], si
         mov word [cs:pc88va_m12_request_+RD_COUNT], 1
@@ -337,7 +338,7 @@ FL_READ:
         call pc88va_kernel_disk_read_
         pop ds
         or ax, ax
-        jnz .bad
+        jnz .read_io_error
         push cx
         push ds
         push cs
@@ -353,12 +354,21 @@ FL_READ:
         ; request record rather than relying on the copied-byte count.
         mov si, [cs:pc88va_m12_request_+RD_LBA]
         inc si
+        add di, 1024
+        jc .bad
         dec cx
         jnz .next
         xor ax, ax
         jmp short .return
+.read_io_error:
+        cmp ax, 5
+        jne .read_generic_error
+        call pc88va_map_va_write_status
+        jmp short .return
+.read_generic_error:
+        mov ax, 2                 ; DOS general I/O error
 .bad:
-        mov ax, 5                 ; DOS write-protect/general I/O error
+        mov ax, 2
 .return:
         pop es
         pop dx
@@ -407,6 +417,41 @@ pc88va_map_va_write_status:
         mov ax, 2
         ret
 
+; Validate the caller's 1024-byte ES:DI transfer without changing the
+; adapter's loop registers.  The VA BIOS requires a contiguous buffer that
+; does not cross FFFFFh; the word copy also cannot wrap the 16-bit offset.
+pc88va_validate_buffer_1024:
+        push ax
+        push dx
+        push cx
+        cmp di, 0xfc00
+        jae .buffer_invalid
+        mov ax, es
+        mov dx, ax
+        mov cl, 12
+        shr dx, cl
+        mov cl, 4
+        shl ax, cl
+        add ax, di
+        adc dx, 0
+        add ax, 1024
+        adc dx, 0
+        cmp dx, 16
+        ja .buffer_invalid
+        jb .buffer_valid
+        or ax, ax
+        jnz .buffer_invalid
+.buffer_valid:
+        clc
+        jmp short .buffer_restore
+.buffer_invalid:
+        stc
+.buffer_restore:
+        pop cx
+        pop dx
+        pop ax
+        ret
+
 ; COUNT fl_write(WORD drive, WORD head, WORD cylinder, WORD sector,
 ;                WORD count, UBYTE FAR *buffer).
 ; The resident transfer core performs all range, capacity, physical-end,
@@ -452,12 +497,13 @@ FL_WRITE:
         dec dx
         mov si, dx
         add dx, cx
+        jc .write_bad
         cmp dx, 1280
         ja .write_bad
         les di, [.buffer]
 .write_next:
-        cmp di, 0xfc00
-        jae .write_bad
+        call pc88va_validate_buffer_1024
+        jc .write_bad
         push cx
         push si
         push di
@@ -507,6 +553,7 @@ FL_WRITE:
         mov si, [cs:pc88va_m12_request_+RD_LBA]
         inc si
         add di, 1024
+        jc .write_bad
         dec cx
         jnz .write_next
         xor ax, ax
@@ -566,12 +613,13 @@ FL_VERIFY:
         dec dx
         mov si, dx
         add dx, cx
+        jc .verify_bad
         cmp dx, 1280
         ja .verify_bad
         les di, [.buffer]
 .verify_next:
-        cmp di, 0xfc00
-        jae .verify_bad
+        call pc88va_validate_buffer_1024
+        jc .verify_bad
         mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_LBA], si
         mov word [cs:pc88va_m12_request_+RD_COUNT], 1
@@ -619,12 +667,18 @@ FL_VERIFY:
         mov si, [cs:pc88va_m12_request_+RD_LBA]
         inc si
         add di, 1024
+        jc .verify_bad
         dec cx
         jnz .verify_next
         xor ax, ax
         jmp short .verify_return
 .verify_io_error:
-        mov ax, 5
+        cmp ax, 5
+        jne .verify_generic_error
+        call pc88va_map_va_write_status
+        jmp short .verify_return
+.verify_generic_error:
+        mov ax, 2
         jmp short .verify_return
 .verify_mismatch:
         mov ax, 10h

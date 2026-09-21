@@ -125,12 +125,23 @@ class DiskWriteCoreTests(unittest.TestCase):
         for update, expected in (
             ({0: 2}, 1), ({7: 0}, 1), ({8: 0}, 1), ({9: 513}, 1),
             ({2: 0}, 2), ({1: 72}, 2), ({1: 71, 2: 2}, 2),
+            ({1: 0xfffe, 2: 2, 6: 0xffff}, 2),
             ({5: 511}, 3), ({2: 128, 6: 512}, 3), ({3: 0xff00}, 3),
+            ({4: 0xffff}, 2),
         ):
             with self.subTest(update=update):
                 result, calls, final, media, _ = self.execute(update)
                 self.assertEqual((result, calls), (expected, []))
-                self.assertEqual(final[14], 0)
+        self.assertEqual(final[14], 0)
+        self.assertEqual(media, bytes(len(media)))
+
+    def test_not_ready_and_timeout_do_not_retry_a_removable_request(self):
+        for firmware_status in (4, 0x0d):
+            with self.subTest(firmware_status=firmware_status):
+                result, calls, final, media, _ = self.execute(
+                    results=[(firmware_status, 0)]
+                )
+                self.assertEqual((result, len(calls), final[14]), (5, 1, 0))
                 self.assertEqual(media, bytes(len(media)))
 
     def test_short_transfer_and_bounded_retry(self):

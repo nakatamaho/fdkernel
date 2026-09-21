@@ -257,8 +257,10 @@ BOOL ExtLBAForce = FALSE;
 COUNT init_readdasd(UBYTE drive)
 {
 #if defined(PC88VA)
-  /* The M12 resident adapter exposes one removable logical drive (A:). */
-  return drive == 0 ? 0 : DF_NOACCESS;
+  /* The M14 VA adapter exposes one removable logical drive (A:).  INT 80h
+     AH=09 is the documented door-change query and its conservative CF=1
+     result is used to invalidate common FAT buffers before revalidation. */
+  return drive == 0 ? DF_CHANGELINE : DF_NOACCESS;
 #else
   static iregs regs;
 

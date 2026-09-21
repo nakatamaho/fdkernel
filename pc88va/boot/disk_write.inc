@@ -125,6 +125,15 @@ pc88va_disk_write_core:
     mov [si+RD_ADAPTER_STATUS], ax
     or ax, ax
     jz .completed_sector
+    ; AH=04/0D are the VA not-ready/timeout results.  Do not retry a
+    ; removable-media request after those results: the medium may have been
+    ; removed and replaced while this request was outstanding.  The common
+    ; DOS layer receives the typed firmware error and performs revalidation
+    ; before a later request can use the caller's buffer again.
+    cmp word [si+RD_ADAPTER_STATUS], 4
+    je .firmware
+    cmp word [si+RD_ADAPTER_STATUS], 0dh
+    je .firmware
     cmp word [si+RD_RETRIES_LEFT], 0
     je .firmware
     dec word [si+RD_RETRIES_LEFT]
