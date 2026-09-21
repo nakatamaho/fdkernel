@@ -54,7 +54,8 @@ class M14TargetTests(unittest.TestCase):
         self.assertIn("rp->r_count > size - start", dsk)
         self.assertIn("retry_limit = 1", dsk)
         self.assertIn("count > 1", dsk)
-        self.assertIn("Retaining dirty buffers across that boundary", fatfs)
+        self.assertIn("VOID media_invalidate(", fatfs)
+        self.assertIn("s->sft_flags |= SFT_FSTALE", fatfs)
 
     def test_resident_write_object_dependency_is_explicit(self):
         makefile = (TARGET / "makefile.m13.wc").read_text(encoding="utf-8")

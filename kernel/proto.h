@@ -177,6 +177,12 @@ int dos_cd(char * PathName);
 COUNT dos_getfattr(BYTE * name);
 COUNT dos_setfattr(BYTE * name, UWORD attrp);
 COUNT media_check(REG struct dpb FAR * dpbp);
+#if defined(PC88VA)
+extern UWORD media_generation;
+VOID media_invalidate(struct dpb FAR *dpbp);
+BOOL media_check_io(struct dpb FAR *dpbp);
+BOOL media_check_sft(sft FAR *sftp);
+#endif
 f_node_ptr xlt_fd(COUNT fd);
 COUNT xlt_fnp(f_node_ptr fnp);
 struct dhdr FAR * select_unit(COUNT drive);
