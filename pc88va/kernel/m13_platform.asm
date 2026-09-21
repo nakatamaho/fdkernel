@@ -309,6 +309,8 @@ FL_READ:
         cmp dx, 1280
         ja .bad
         les di, [.buffer]
+        call pc88va_validate_buffer_request
+        jc .bad
 .next:
         call pc88va_validate_buffer_1024
         jc .bad
@@ -417,6 +419,37 @@ pc88va_map_va_write_status:
         mov ax, 2
         ret
 
+; Validate the complete CX-sector caller extent before the first transfer.
+; Checking only each successive sector would allow an invalid later buffer
+; boundary to be discovered after an earlier write has already reached disk.
+pc88va_validate_buffer_request:
+        push ax
+        push bx
+        push dx
+        push di
+        mov ax, cx
+        or ax, ax
+        jz .request_buffer_invalid
+        dec ax
+        mov bx, 1024
+        mul bx
+        or dx, dx
+        jnz .request_buffer_invalid
+        add di, ax
+        jc .request_buffer_invalid
+        ; The last sector has the highest offset and physical end. Neither
+        ; the offset arithmetic nor the physical address may wrap.
+        call pc88va_validate_buffer_1024
+        jmp short .request_buffer_restore
+.request_buffer_invalid:
+        stc
+.request_buffer_restore:
+        pop di
+        pop dx
+        pop bx
+        pop ax
+        ret
+
 ; Validate the caller's 1024-byte ES:DI transfer without changing the
 ; adapter's loop registers.  The VA BIOS requires a contiguous buffer that
 ; does not cross FFFFFh; the word copy also cannot wrap the 16-bit offset.
@@ -425,7 +458,7 @@ pc88va_validate_buffer_1024:
         push dx
         push cx
         cmp di, 0xfc00
-        jae .buffer_invalid
+        ja .buffer_invalid
         mov ax, es
         mov dx, ax
         mov cl, 12
@@ -501,6 +534,8 @@ FL_WRITE:
         cmp dx, 1280
         ja .write_bad
         les di, [.buffer]
+        call pc88va_validate_buffer_request
+        jc .write_bad
 .write_next:
         call pc88va_validate_buffer_1024
         jc .write_bad
@@ -552,10 +587,12 @@ FL_WRITE:
 .write_sector_ok:
         mov si, [cs:pc88va_m12_request_+RD_LBA]
         inc si
+        dec cx
+        jz .write_complete
         add di, 1024
         jc .write_bad
-        dec cx
-        jnz .write_next
+        jmp .write_next
+.write_complete:
         xor ax, ax
         jmp short .write_return
 .write_bad:
@@ -617,6 +654,8 @@ FL_VERIFY:
         cmp dx, 1280
         ja .verify_bad
         les di, [.buffer]
+        call pc88va_validate_buffer_request
+        jc .verify_bad
 .verify_next:
         call pc88va_validate_buffer_1024
         jc .verify_bad
@@ -666,10 +705,12 @@ FL_VERIFY:
         jne .verify_mismatch
         mov si, [cs:pc88va_m12_request_+RD_LBA]
         inc si
+        dec cx
+        jz .verify_complete
         add di, 1024
         jc .verify_bad
-        dec cx
-        jnz .verify_next
+        jmp .verify_next
+.verify_complete:
         xor ax, ax
         jmp short .verify_return
 .verify_io_error:
