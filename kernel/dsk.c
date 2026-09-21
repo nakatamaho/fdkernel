@@ -173,8 +173,13 @@ static dsk_proc * const dispatch[NENTRY] =
 COUNT ASMCFUNC FAR blk_driver(rqptr rp)
 {
   if (rp->r_unit >= blk_dev.dh_name[0] && rp->r_command != C_INIT)
+  {
+    if (rp->r_command == C_INPUT || rp->r_command == C_OUTPUT ||
+        rp->r_command == C_OUTVFY)
+      rp->r_count = 0;
     return failure(E_UNIT);
-  if (rp->r_command > NENTRY)
+  }
+  if (rp->r_command >= NENTRY)
   {
     return failure(E_FAILURE);  /* general failure */
   }
@@ -829,11 +834,15 @@ STATIC WORD blockio(rqptr rp, ddt * pddt)
       action = LBA_WRITE_VERIFY;
       break;
     default:
+      rp->r_count = 0;
       return failure(E_FAILURE);
   }
 
   if (pddt->ddt_descflags & DF_NOACCESS)      /* drive inaccessible */
+  {
+    rp->r_count = 0;
     return failure(E_FAILURE);
+  }
 
   tmark(pddt);
   start = (rp->r_start != HUGECOUNT ? rp->r_start : rp->r_huge);
@@ -842,7 +851,8 @@ STATIC WORD blockio(rqptr rp, ddt * pddt)
 
   if (start >= size || rp->r_count > size - start)
   {
-    return 0x0408;
+    rp->r_count = 0;
+    return failure(E_NOTFND);
   }
   start += pddt->ddt_offset;
 
