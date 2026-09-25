@@ -33,6 +33,7 @@
 #include "debug.h"
 #if defined(PC88VA)
 #include "../pc88va/kernel/m13_layout.h"
+#include "../pc88va/build/pc88va_build_id.h"
 #endif
 
 #ifdef VERSION_STRINGS
@@ -623,7 +624,7 @@ STATIC VOID signon()
   /* The common %S far-pointer formatter is not part of the PC-88VA
      resident startup contract; keep the platform banner bounded while the
      common DOS initialization proceeds. */
-  printf("\rPC88VA kernel\n");
+  printf("\rPC88VA kernel\nbuild: %s\n", PC88VA_BUILD_ID);
 #else
   printf("\r%S"
          "Kernel compatibility %d.%d - "
