@@ -621,10 +621,10 @@ STATIC VOID FsConfig(VOID)
 STATIC VOID signon()
 {
 #if defined(PC88VA)
-  /* The common %S far-pointer formatter is not part of the PC-88VA
-     resident startup contract; keep the platform banner bounded while the
-     common DOS initialization proceeds. */
-  printf("\rPC88VA kernel\nbuild: %s\n", PC88VA_BUILD_ID);
+  /* Keep the build ID in the format string itself: init printf's %s reads a
+     near pointer through DS, while the compiler may place this literal in a
+     different segment. Adjacent C literals are concatenated at compile time. */
+  printf("\rPC88VA kernel\nbuild: " PC88VA_BUILD_ID "\n");
 #else
   printf("\r%S"
          "Kernel compatibility %d.%d - "
