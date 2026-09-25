@@ -66,6 +66,12 @@ org 0
 %ifndef M13_IN_PLACE
 %define M13_IN_PLACE 0
 %endif
+%ifndef M13_COMPACT_BRIDGE
+%define M13_COMPACT_BRIDGE 0
+%endif
+%if M13_COMPACT_BRIDGE && !M13_IN_PLACE
+%error Compact bridge requires the in-place carrier
+%endif
 %ifndef M13_BRIDGE_IN_ALLOCATION
 %define M13_BRIDGE_IN_ALLOCATION 0
 %endif
@@ -95,8 +101,6 @@ m13_unpack_start:
     ; The MZ transform has already moved the body to offset zero in the
     ; low staging segment.  Keep the bridge in place and use a separate
     ; temporary stack before expanding the resident image.
-    mov ax, M13_FILE_SEG
-    mov ds, ax
     mov [cs:m13_saved_dx], dx
     jmp m13_unpack_run
 %elif M13_BRIDGE_IN_ALLOCATION
@@ -131,12 +135,7 @@ m13_unpack_run:
     mov sp, M13_BRIDGE_STACK_SP
     cld
 
-%if M13_IN_PLACE
-    ; The compressed stream and relocation records remain in the staging
-    ; segment.  The history ring is a high offset in that same segment.
-    mov ax, M13_FILE_SEG
-    mov ds, ax
-%else
+%if !M13_IN_PLACE
     ; Copy the compressed payload out of the transformed carrier before
     ; expanding output over that carrier.
     mov ax, M13_LOAD_SEG
@@ -189,8 +188,7 @@ m13_unpack_run:
     mov ax, M13_OUTPUT_HI
     mov [cs:m13_remaining_hi], ax
     mov word [cs:m13_dest_segment], M13_IMAGE_SEG
-    mov byte [cs:m13_flags], 0
-    mov byte [cs:m13_flag_bits], 0
+    ; The flags begin at zero in the loaded bridge image.
 
 .token:
     cmp word [cs:m13_remaining_hi], 0
@@ -214,28 +212,21 @@ m13_unpack_run:
     call m13_consume_flag
     call m13_next_byte
     jc .fail
-    mov [cs:m13_token_lo], al
+    mov dl, al
     call m13_next_byte
     jc .fail
-    mov [cs:m13_token_hi], al
-    xor ax, ax
-    mov al, [cs:m13_token_lo]
-    mov dx, ax
-    xor ax, ax
-    mov al, [cs:m13_token_hi]
-    mov ah, al
+    mov bl, al
+    mov ah, bl
     and ah, 0xf0
     mov cl, 4
     shr ah, cl
     mov al, dl
     inc ax
     mov dx, ax
-    xor ax, ax
-    mov al, [cs:m13_token_hi]
+    mov al, bl
     and al, 0x0f
     xor ah, ah
     add ax, 3
-    mov [cs:m13_match_length], ax
     mov cx, ax
     ; The token stores a backwards distance.  Convert it to the current
     ; ring index before emitting an overlapping match.
@@ -352,6 +343,9 @@ m13_unpack_run:
     hlt
     jmp .fail
 
+; The in-place handoff returns directly above. Its legacy fetch trampoline
+; is unreachable and can be omitted by an explicitly compact carrier build.
+%if !M13_COMPACT_BRIDGE
 m13_flush_code:
     times 16 nop
     mov ax, M13_IMAGE_SEG + M13_ORIG_CS
@@ -359,6 +353,7 @@ m13_flush_code:
     mov ax, M13_ORIG_IP
     push ax
     retf
+%endif
 
 ; Load the next flag bit.  Carry means that the bounded source is exhausted.
 m13_next_flag:
@@ -434,9 +429,6 @@ m13_remaining_lo:   dw 0
 m13_remaining_hi:   dw 0
 m13_dest_segment:   dw 0
 m13_match_offset:   dw 0
-m13_match_length:   dw 0
-m13_token_lo:       db 0
-m13_token_hi:       db 0
 m13_flags:          db 0
 m13_flag_bits:      db 0
 m13_unpack_end:

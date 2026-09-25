@@ -79,6 +79,10 @@ segment HMA_TEXT
 ; in psp). We convert it to a normal call and correct the stack to appear same
 ; as if invoked via an int 21h call including proper return address.
 ;
+global _reloc_call_cpm_entry
+_reloc_call_cpm_entry:
+global reloc_call_cpm_entry_
+reloc_call_cpm_entry_:
 reloc_call_cpm_entry:
                 ; Stack is:
                 ;       return offset
@@ -566,7 +570,11 @@ int2526:
                 push    dx                      ; SS:SP -> user stack
                 push    cx
                 push    ax                      ; was set on entry = 25,26
+%ifdef PC88VA
+                call    far _int2526_handler
+%else
                 call    _int2526_handler
+%endif
                 add     sp, byte 6
 
                 pop     cx

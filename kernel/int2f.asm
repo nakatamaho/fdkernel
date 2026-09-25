@@ -150,7 +150,13 @@ Int2f?14:      ;; MUX-14 -- NLSFUNC API
                Protect386Registers
                PUSH$ALL
                SwitchToInt2fStack
+%ifdef PC88VA
+               ; The VA medium-model C body is outside the copied assembly
+               ; segment and consumes a FAR return frame.
+               call far _syscall_MUX14
+%else
                call _syscall_MUX14
+%endif
                DoneInt2fStack
                pop bp                  ; Discard incoming AX
                push ax                 ; Correct stack for POP$ALL
@@ -215,7 +221,11 @@ IntDosCal:
 
     SwitchToInt2fStack
     extern   _int2F_12_handler
+%ifdef PC88VA
+    call far _int2F_12_handler
+%else
     call _int2F_12_handler
+%endif
     DoneInt2fStack
 
 %if XCPU >= 386
@@ -543,6 +553,28 @@ int2f_restore_ds:
 		extern _nlsInfo
 		global CALL_NLS
 CALL_NLS:
+%ifdef PC88VA
+                ; Medium-model Pascal: FAR return, followed by seven words
+                ; of arguments in reverse declaration order.
+                push    bp
+                mov     bp, sp
+                push    si
+                push    di
+                mov     cx, [ss:bp+6]   ; buffer length
+                mov     dx, [ss:bp+8]   ; country
+                mov     bx, [ss:bp+10]  ; codepage
+                mov     ax, [ss:bp+12]  ; subfunction
+                mov     ah, 0x14
+                mov     si, _nlsInfo
+                les     di, [ss:bp+14]  ; caller's far buffer
+                mov     bp, [ss:bp+18]  ; multiplex BP argument
+                int     0x2f
+                mov     dx, bx
+                pop     di
+                pop     si
+                pop     bp
+                retf    14
+%else
 		pop	es		; ret addr
 		pop	cx		; bufsize
 		pop	dx		; cntry
@@ -563,6 +595,7 @@ CALL_NLS:
 		pop	si
 		pop	bp
 		ret	6
+%endif
 
 ; extern UWORD ASMPASCAL floppy_change(UWORD drives)
 ; PC-88VA supplies the bounded read-only adapter implementation.  Keeping

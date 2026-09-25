@@ -33,6 +33,7 @@ struct _bios_LBA_address_packet {
     ULONG block_address, block_address_high;
 };
 static unsigned resets, calls, fail_at, injected_error;
+static unsigned reads, writes, verifies;
 static UBYTE DiskTransferBuffer[4096], parameter_table[16];
 #define hd(x) ((x) & DF_FIXED)
 #define FP_SEG(x) 0x1000
@@ -55,9 +56,12 @@ static int transfer(unsigned drive, unsigned head, unsigned cylinder,
     ++calls;
     return fail_at && calls >= fail_at ? injected_error : 0;
 }
-#define fl_read transfer
-#define fl_write transfer
-#define fl_verify transfer
+#define DEVICE_CALL(name,counter) \
+static int name(unsigned d,unsigned h,unsigned c,unsigned s,unsigned n,void *b) { \
+    ++counter; return transfer(d,h,c,s,n,b); }
+DEVICE_CALL(fl_read,reads)
+DEVICE_CALL(fl_write,writes)
+DEVICE_CALL(fl_verify,verifies)
 #define fl_format transfer
 static int fl_lba_ReadWrite(unsigned drive, unsigned mode, struct _bios_LBA_address_packet *packet) {
     (void)drive; (void)mode; (void)packet;
@@ -72,14 +76,16 @@ int main(int argc, char **argv) {
     UWORD completed = 0xFFFF;
     unsigned mode, count;
     int error;
-    if (argc != 5) return 2;
+    if (argc != 5 && argc != 6) return 2;
     mode = strtoul(argv[1], NULL, 0);
     count = strtoul(argv[2], NULL, 0);
     fail_at = strtoul(argv[3], NULL, 0);
     injected_error = strtoul(argv[4], NULL, 0);
     parameter_table[4] = disk.ddt_bpb.bpb_nsecs;
     error = LBA_Transfer(&disk, mode, buffer, 0, count, &completed);
-    printf("%d %u %u %u\n", error, completed, calls, resets);
+    printf("%d %u %u %u", error, completed, calls, resets);
+    if(argc==6) printf(" %u %u %u", reads, writes, verifies);
+    puts("");
     return 0;
 }
 '''
@@ -141,6 +147,18 @@ class CommonTransferTests(unittest.TestCase):
         for mode in (0x4200, 0x4300, 0x4302):
             with self.subTest(mode=mode):
                 self.assertEqual(self.execute(False, mode, 2, 1), (3, 0, 5, 5))
+
+    def test_verify_without_caller_data_checks_readability_not_byte_equality(self):
+        # IOCTL Verify Track has no comparison-data pointer. The VA adapter's
+        # fl_verify is reserved for write/readback comparison; standalone
+        # verification must read sectors through its bounded scratch buffer.
+        for va, expected in ((True, (0, 2, 2, 0, 2, 0, 0)),
+                             (False, (0, 2, 1, 0, 0, 0, 1))):
+            with self.subTest(va=va):
+                result = subprocess.run([str(self.programs[va]), '17408', '2',
+                                         '0', '3', 'metrics'], check=True,
+                                        capture_output=True, timeout=5)
+                self.assertEqual(tuple(map(int, result.stdout.split())), expected)
 
 
 if __name__ == "__main__":

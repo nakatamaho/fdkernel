@@ -65,6 +65,9 @@ STATIC void setup_int_vectors(void);
 #include "../pc88va/kernel/m13_diag.h"
 #endif
 extern VOID FAR reloc_call_int21_handler(void);
+#if defined(PC88VA)
+extern VOID FAR reloc_call_cpm_entry(void);
+#endif
 extern VOID FAR reloc_call_blk_driver(void);
 extern VOID FAR reloc_call_clk_driver(void);
 extern unsigned short pc88va_console_putc(unsigned short character);
@@ -369,8 +372,12 @@ STATIC void setup_int_vectors(void)
   HaltCpuWhileIdle = 0;
   for (pvec = vectors; pvec < vectors + (sizeof vectors/sizeof *pvec); pvec++)
     setvec(pvec->intno, (intvec)MK_FP(FP_SEG(empty_handler), pvec->handleroff));
+  /* Keep the far-jump opcode in the IVT; its relocated target is filled in
+     after the resident entry is known below. */
   pokeb(0, 0x30 * 4, 0xea);
+#if !defined(PC88VA)
   pokel(0, 0x30 * 4 + 1, (ULONG)cpm_entry);
+#endif
 
   /* these two are in the device driver area LOWTEXT (0x70) */
   setvec(0x1b, got_cbreak);
@@ -418,10 +425,15 @@ STATIC void init_kernel(void)
                             FP_OFF(reloc_call_clk_driver) + 3)) = FP_SEG(clk_driver);
   }
   /* MoveKernel relocates the HMA text, including the common INT 21 entry.
-     The initial vector table was installed before that move, so refresh only
-     this vector to the now-resident entry before the first init-time call. */
+     The initial vector table was installed before that move, so refresh this
+     vector to the now-resident entry before the first init-time call. */
   setvec(0x21, (intvec)MK_FP(CurrentKernelSegment,
                              FP_OFF(reloc_call_int21_handler)));
+#if defined(PC88VA)
+  /* M13 relocates the VA resident entry away from the low bootstrap thunk. */
+  pokel(0, 0x30 * 4 + 1,
+        (ULONG)MK_FP(CurrentKernelSegment, FP_OFF(reloc_call_cpm_entry)));
+#endif
 #if defined(PC88VA)
   /* Private diagnostic: capture the actual IVT 21h words after refresh. */
   (void)pc88va_m13_int21_vector_probe();

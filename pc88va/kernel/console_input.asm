@@ -49,6 +49,7 @@ pc88va_console_getc_:
         mov bp, sp
         test word [ss:bp+16], 0700h
         jnz m11_bad
+        xor bp, bp
         jmp short m11_validate_common
 
 ; The common DOS device dispatcher deliberately inherits IF=1 after INT 21h.
@@ -69,6 +70,7 @@ pc88va_console_getc_dos_:
         mov bp, sp
         test word [ss:bp+16], 0500h
         jnz m11_bad
+        mov bp, 1
 m11_validate_common:
         cmp ax, pc88va_m11_character_
         jne m11_bad
@@ -117,6 +119,10 @@ m11_not_return_alias:
         cmp si, 8
         jne m11_not_shift_alias
         and al, 0b7h
+        ; DOS interprets Ctrl with a letter; a modifier edge is not a key.
+        or bp, bp
+        jz m11_not_shift_alias
+        and al, 7fh
 m11_not_shift_alias:
         cmp si, 14
         jne m11_not_shift
@@ -150,6 +156,10 @@ m11_next_bit:
         ; Unsupported modifier/mode combinations cannot become plain ASCII.
         mov al, [cs:m11_current+8]
         not al
+        or bp, bp
+        jz m11_check_modes
+        and al, 7fh
+m11_check_modes:
         test al, 0b0h
         jnz m11_unsupported
         test byte [cs:m11_current+10], 80h
@@ -158,6 +168,17 @@ m11_next_bit:
         not al
         test al, 0fh
         jnz m11_unsupported
+        ; The early raw ABI still rejects Escape and Tab. DOS needs their
+        ; ASCII control values; break/EOF policy stays in the common kernel.
+        or bp, bp
+        jz m11_find_key
+        cmp bl, 9*8+7
+        mov al, 27
+        je m11_store_character
+        cmp bl, 10*8+0
+        mov al, 9
+        je m11_store_character
+m11_find_key:
         mov si, m11_keys
         mov cx, (m11_keys_end-m11_keys)/3
 m11_lookup:
@@ -167,6 +188,15 @@ m11_lookup:
         loop m11_lookup
         jmp short m11_unsupported
 m11_found:
+        test byte [cs:m11_current+8], 80h
+        jnz m11_apply_shift
+        mov al, [cs:si+1]
+        sub al, 'a'
+        cmp al, 25
+        ja m11_unsupported
+        inc al
+        jmp short m11_store_character
+m11_apply_shift:
         mov al, [cs:m11_current+14]
         not al
         and al, 0ch
@@ -176,6 +206,7 @@ m11_plain:
         mov al, [cs:si+1]
         or al, al
         jz m11_unsupported
+m11_store_character:
         xor ah, ah
         mov [cs:pc88va_m11_character_], ax
         xor ax, ax

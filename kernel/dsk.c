@@ -401,10 +401,10 @@ STATIC WORD getbpb(ddt * pddt)
     /*
      * PC-88VA media uses the loader's 1024-byte layout and does not carry
      * the DOS 0x55aa marker at 01feh.  The initialized default BPB is the
-     * authoritative geometry for this target, so report internal success;
-     * S_DONE is a request status, not getbpb()'s success value.
+     * authoritative geometry for this target. Continue with the current
+     * sector's extended fields instead of retaining cached media identity.
      */
-    return 0;
+    goto read_extended_bpb;
 #else
     return S_DONE;
 #endif
@@ -416,6 +416,9 @@ STATIC WORD getbpb(ddt * pddt)
 
   memcpy(pbpbarray, &DiskTransferBuffer[BT_BPB], sizeof(bpb));
 
+#if defined(PC88VA)
+read_extended_bpb:
+#endif
   /*?? */
   /*  2b is fat16 volume label. if memcmp, then offset 0x36.
      if (fstrncmp((BYTE *) & DiskTransferBuffer[0x36], "FAT16",5) == 0  ||
@@ -519,6 +522,12 @@ STATIC WORD IoctlQueblk(rqptr rp, ddt * pddt)
   if (rp->r_cat == 8)
 #endif
   {
+#if defined(PC88VA)
+    UBYTE fun = rp->r_fun & 0xdf;
+    if ((fun >= 0x40 && fun <= 0x42) ||
+        (fun >= 0x46 && fun <= 0x47))
+      return S_DONE;
+#else
     switch (rp->r_fun)
     {
     case 0x46:
@@ -528,6 +537,7 @@ STATIC WORD IoctlQueblk(rqptr rp, ddt * pddt)
     case 0x67:
       return S_DONE;
     }
+#endif
   }
   return failure(E_CMD);
 }
@@ -733,7 +743,11 @@ STATIC WORD Genblkdev(rqptr rp, ddt * pddt)
         {
           register BYTE extended_BPB_signature = 
             DiskTransferBuffer[(pddt->ddt_bpb.bpb_nfsect != 0 ? 0x26 : 0x42)];
+#if defined(PC88VA)
+          if ((extended_BPB_signature != 0x29) && (extended_BPB_signature != 0x28))
+#else
           if ((extended_BPB_signature != 0x29) || (extended_BPB_signature != 0x28))
+#endif
             return failure(E_MEDIA);
         }
 
@@ -1062,13 +1076,17 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
        prevents the common retry loop from replaying a dirty caller buffer on
        a newly inserted medium.  The resident VA core still owns its bounded
        firmware retries. */
-    if ((mode == LBA_WRITE || mode == LBA_WRITE_VERIFY) && count > 1)
+    if (((mode & 0xff00) == LBA_WRITE || mode == LBA_VERIFY) && count > 1)
       count = 1;
-    if (mode == LBA_WRITE || mode == LBA_WRITE_VERIFY)
+    if ((mode & 0xfffd) == LBA_WRITE)
       retry_limit = 1;
 #endif
 
-    if (FP_SEG(buffer) >= 0xa000 || count == 0)
+    if (FP_SEG(buffer) >= 0xa000 || count == 0
+#if defined(PC88VA)
+        || mode == LBA_VERIFY
+#endif
+       )
     {
       transfer_address = DiskTransferBuffer;
       count = 1;
@@ -1126,6 +1144,16 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
           count = pbpb->bpb_nsecs + 1 - chs.Sector;
         }
 
+#if defined(PC88VA)
+        /* For the defined LBA modes, bit 8 marks writes; FORMAT is separate. */
+        error_code = (mode == LBA_FORMAT ? fl_format :
+                      (mode & 0x0100) ? fl_write : fl_read) (driveno,
+                                                          chs.Head,
+                                                          chs.Cylinder,
+                                                          chs.Sector,
+                                                          count,
+                                                          transfer_address);
+#else
         error_code = (mode == LBA_READ ? fl_read :
                       mode == LBA_VERIFY ? fl_verify :
                       mode ==
@@ -1135,6 +1163,7 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
                                                           chs.Sector,
                                                           count,
                                                           transfer_address);
+#endif
 
         if (error_code == 0 && mode == LBA_WRITE_VERIFY)
         {
@@ -1160,7 +1189,11 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
 
     /* copy to user buffer if nesessary */
     if (transfer_address == DiskTransferBuffer &&
+#if defined(PC88VA)
+        mode == LBA_READ)
+#else
         (mode & 0xff00) == (LBA_READ & 0xff00))
+#endif
     {
       fmemcpy(buffer, DiskTransferBuffer, bytes_sector);
     }
@@ -1169,7 +1202,10 @@ STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
     LBA_address += count;
     totaltodo -= count;
 
-    buffer = adjust_far((char FAR *)buffer + count * bytes_sector);
+#if defined(PC88VA)
+    if (mode != LBA_VERIFY)
+#endif
+      buffer = adjust_far((char FAR *)buffer + count * bytes_sector);
   }
 
   return (error_code);
