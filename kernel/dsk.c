@@ -495,7 +495,9 @@ STATIC WORD getbpb(ddt * pddt)
   memcpy(pbpbarray, &DiskTransferBuffer[BT_BPB], sizeof(bpb));
 #endif
 
+#ifdef PC88VA
 read_extended_bpb:
+#endif
   /*?? */
   /*  2b is fat16 volume label. if memcmp, then offset 0x36.
      if (fstrncmp((BYTE *) & DiskTransferBuffer[0x36], "FAT16",5) == 0  ||

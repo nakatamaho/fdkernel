@@ -39,6 +39,10 @@ class TargetTests(unittest.TestCase):
         self.assertIn("PROVIDE(PC88VA_M16_PROBE_READ = 0);", linker)
         self.assertIn("PROVIDE(PC88VA_M16_SET_PROFILE = 0);", linker)
 
+    def test_extended_bpb_label_is_pc88va_only(self) -> None:
+        source = (TARGET.parent / "kernel/dsk.c").read_text(encoding="utf-8")
+        self.assertRegex(source, r"#ifdef PC88VA\s+read_extended_bpb:\s+#endif")
+
     def test_object_plan_has_closed_classifications(self) -> None:
         plan = json.loads((TARGET / "config/build-plan.json").read_text(encoding="utf-8"))
         allowed = {"common-core", "shared-portable", "pc88va-owned", "temporary-fail-closed-stub"}
