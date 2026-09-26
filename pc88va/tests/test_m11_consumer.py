@@ -42,6 +42,7 @@ class ConsumerTests(unittest.TestCase):
                 "pc88va_m10_state_: db 2\n"
                 "pc88va_m10_clock_record_: dw 1,0,0\n"
                 "pc88va_clock_read_:\n"
+                "push dx\npushf\npop dx\ntest dx,0600h\npop dx\njnz .bad_clock\n"
                 "cmp ax,pc88va_m10_clock_record_\n"
                 "jne .bad_clock\n"
                 "mov ax,ds\n"

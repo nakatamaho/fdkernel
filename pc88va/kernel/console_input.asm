@@ -58,8 +58,9 @@ pc88va_console_getc_:
 ; The common DOS device dispatcher deliberately inherits IF=1 after INT 21h.
 ; Keep the public raw entry strict, but expose an integration entry which
 ; accepts that inherited IF while retaining the same non-reentrant poll and
-; preserving the caller's architectural flags.  No interrupt is installed or
-; suppressed here; this is only the established caller-contract boundary.
+; preserving the caller's architectural flags.  The matrix poll itself does
+; not install or suppress an interrupt; repeat clock sampling separately meets
+; M10's IF=DF=0 service contract and restores the caller's flags.
 pc88va_console_getc_dos_:
         pushf
         push bx
@@ -630,12 +631,18 @@ m16_sample_clock:
         ; The standalone test supplies a deterministic clock stub below this
         ; include; the production path uses the validated M10 service.
 %endif
+        ; DOS CON can call this adapter with IF=1. M10 clock reads require
+        ; IF=DF=0 while polling the VRTC port; preserve and restore DOS flags.
+        pushf
+        cli
+        cld
         push ds
         push cs
         pop ds
         mov ax, pc88va_m10_clock_record_
         call pc88va_clock_read_
         pop ds
+        popf
         or ax, ax
         jnz m16_clock_failed
         cmp word [cs:pc88va_m10_clock_record_], 1
