@@ -25,6 +25,7 @@ segment _TEXT class=CODE public use16
 
 extern pc88va_m10_state_
 extern pc88va_console_putc_
+extern pc88va_m16_profiles_
 
 ; Keep a resident copy of the accepted M08 validator/transfer state machine.
 ; The loader object retains its historical copy; this copy is linked into the
@@ -94,22 +95,49 @@ pc88va_kernel_disk_read_:
 ; callback returns AX=0 and CX=sector bytes only after the firmware reports
 ; success; no write/format command is reachable from this entry.
 pc88va_kernel_firmware_read_one_:
+        mov bx, [si+20]
+        cmp bx, 1
+        ja .firmware_not_ready
+        mov dx, bx
+        shl bx, 1
+        shl dx, 1
+        shl dx, 1
+        shl dx, 1
+        add bx, dx
+        push si
+        mov al, [cs:pc88va_m16_profiles_+bx]
+        mov ch, byte [si+20]
+        mov ah, 0ah
+        push word [cs:pc88va_m12_call_flags_]
+        popf
+        int 80h
+        pop si
+        jc .firmware_error
+        or ah, ah
+        jnz .firmware_error
         mov ax, [si+40]
         mov es, ax
         mov bp, [si+38]
-        mov bh, [si+32]
-        mov bl, [si+34]
         mov cx, [si+32]
         shl cx, 1
         or cx, [si+34]
         mov ax, [si+20]
         mov ch, al
         mov dh, [si+36]
-        mov dl, 3
+        mov bx, ax
+        shl bx, 1
+        mov dx, bx
+        shl bx, 1
+        shl bx, 1
+        add bx, dx
+        mov dl, [cs:pc88va_m16_profiles_+bx]
+        and dl, 0fh
         mov ax, 8101h
+        push si
         push word [cs:pc88va_m12_call_flags_]
         popf
         int 80h
+        pop si
         jc .firmware_error
         or ah, ah
         jnz .firmware_error
@@ -128,27 +156,58 @@ pc88va_kernel_firmware_read_one_:
         mov ax, 0ffffh             ; CF-only failure: unknown device status
 .firmware_error_return:
         retf
+.firmware_not_ready:
+        xor cx, cx
+        mov ax, 4
+        retf
 
 ; PC-88VA data-write callback.  AH=82h is the VA write-sector service.
 ; The transfer core has already bounded ES:BP to the resident scratch area
 ; and supplies one 1024-byte sector for this callback.
 pc88va_kernel_firmware_write_one_:
+        mov bx, [si+20]
+        cmp bx, 1
+        ja .write_not_ready
+        mov dx, bx
+        shl bx, 1
+        shl dx, 1
+        shl dx, 1
+        shl dx, 1
+        add bx, dx
+        push si
+        mov al, [cs:pc88va_m16_profiles_+bx]
+        mov ch, byte [si+20]
+        mov ah, 0ah
+        push word [cs:pc88va_m12_call_flags_]
+        popf
+        int 80h
+        pop si
+        jc .write_firmware_error
+        or ah, ah
+        jnz .write_firmware_error
         mov ax, [si+40]
         mov es, ax
         mov bp, [si+38]
-        mov bh, [si+32]
-        mov bl, [si+34]
         mov cx, [si+32]
         shl cx, 1
         or cx, [si+34]
         mov ax, [si+20]
         mov ch, al
         mov dh, [si+36]
-        mov dl, 3
+        mov bx, ax
+        shl bx, 1
+        mov dx, bx
+        shl bx, 1
+        shl bx, 1
+        add bx, dx
+        mov dl, [cs:pc88va_m16_profiles_+bx]
+        and dl, 0fh
         mov ax, 8201h
+        push si
         push word [cs:pc88va_m12_call_flags_]
         popf
         int 80h
+        pop si
         jc .write_firmware_error
         mov al, ah
         or al, al
@@ -165,6 +224,10 @@ pc88va_kernel_firmware_write_one_:
         jnz .write_firmware_error_return
         mov ax, 0dh
 .write_firmware_error_return:
+        retf
+.write_not_ready:
+        xor cx, cx
+        mov ax, 4
         retf
 
 ; Resident write entry mirrors the accepted read entry's ownership and

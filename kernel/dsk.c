@@ -43,6 +43,10 @@ static BYTE *dskRcsId =
 
 BOOL ASMPASCAL fl_reset(WORD);
 COUNT ASMPASCAL fl_diskchanged(WORD);
+#if defined(PC88VA)
+extern COUNT ASMPASCAL pc88va_m16_probe_read(WORD, WORD, UBYTE FAR *);
+extern COUNT ASMPASCAL pc88va_m16_set_profile(WORD, WORD, WORD, WORD, WORD);
+#endif
 
 COUNT ASMPASCAL fl_format(WORD, WORD, WORD, WORD, WORD, UBYTE FAR *);
 COUNT ASMPASCAL fl_read(WORD, WORD, WORD, WORD, WORD, UBYTE FAR *);
@@ -62,6 +66,10 @@ UWORD ASMPASCAL floppy_change(UWORD);
 #pragma aux (pascal) fl_readkey modify exact [ax]
 #pragma aux (pascal) fl_lba_ReadWrite modify exact [ax dx]
 #pragma aux (pascal) floppy_change modify exact [ax cx dx]
+#if defined(PC88VA)
+#pragma aux (pascal) pc88va_m16_probe_read modify exact [ax]
+#pragma aux (pascal) pc88va_m16_set_profile modify exact [ax]
+#endif
 #endif
 
 STATIC int LBA_Transfer(ddt * pddt, UWORD mode, VOID FAR * buffer,
@@ -378,7 +386,87 @@ STATIC WORD getbpb(ddt * pddt)
   bpb *pbpbarray = &pddt->ddt_bpb;
   unsigned secs_per_cyl;
   WORD ret;
+#if defined(PC88VA)
+  typedef struct {
+    UWORD mode;
+    UWORD cylinders;
+    UWORD total;
+    UWORD sectors_per_track;
+    UWORD heads;
+    UWORD sector_bytes;
+    UBYTE media;
+    UBYTE standard_signature;
+  } pc88va_m16_profile;
+  static const pc88va_m16_profile profiles[] = {
+    {0x02, 40, 640, 8, 2, 512, 0xff, 1},   /* 2D 320 KiB */
+    {0x02, 40, 720, 9, 2, 512, 0xfd, 1},   /* 2D 360 KiB */
+    {0x12, 80, 1280, 8, 2, 512, 0xfb, 1},  /* 2DD 640 KiB */
+    {0x12, 80, 1440, 9, 2, 512, 0xf9, 1},  /* 2DD 720 KiB */
+    {0x22, 80, 2400, 15, 2, 512, 0xf1, 1}, /* 2HC 1.2 MiB */
+    {0x23, 80, 1280, 8, 2, 1024, 0xfe, 0}, /* existing M15 2HD */
+    {0x23, 77, 1232, 8, 2, 1024, 0xfe, 0} /* 77-cylinder 2HD */
+  };
+  unsigned profile_index;
+  UBYTE saw_read = FALSE;
 
+  /* pddt->ddt_descflags |= DF_NOACCESS;
+   * disabled for now - problems with FORMAT ?? */
+
+  /* set drive to not accessible and changed */
+  if (diskchange(pddt) != M_NOT_CHANGED)
+    pddt->ddt_descflags |= DF_DISKCHANGE;
+
+  pddt->ddt_descflags |= DF_NOACCESS;
+  for (profile_index = 0;
+       profile_index < sizeof(profiles) / sizeof(profiles[0]);
+       profile_index++)
+  {
+    const pc88va_m16_profile *profile = &profiles[profile_index];
+    BYTE *raw_bpb = (BYTE *)&DiskTransferBuffer[BT_BPB];
+    bpb observed;
+    UBYTE signature;
+
+    ret = pc88va_m16_probe_read(pddt->ddt_driveno, profile->mode,
+                                (UBYTE FAR *)DiskTransferBuffer);
+    if (ret != 0)
+      continue;
+    saw_read = TRUE;
+    signature = DiskTransferBuffer[0x1fe] == 0x55 &&
+                DiskTransferBuffer[0x1ff] == 0xaa;
+    memcpy(&observed, raw_bpb, sizeof(observed));
+
+    if (observed.bpb_nbyte != profile->sector_bytes ||
+        observed.bpb_nsize != profile->total || observed.bpb_huge != 0 ||
+        observed.bpb_nsecs != profile->sectors_per_track ||
+        observed.bpb_nheads != profile->heads ||
+        observed.bpb_mdesc != profile->media || observed.bpb_hidden != 0 ||
+        observed.bpb_nsector == 0 ||
+        (observed.bpb_nsector & (observed.bpb_nsector - 1)) != 0 ||
+        observed.bpb_nreserved == 0 || observed.bpb_nfat != 2 ||
+        observed.bpb_ndirent == 0 || observed.bpb_nfsect == 0 ||
+        profile->total != profile->cylinders * profile->heads *
+                          profile->sectors_per_track)
+      continue;
+    if (profile->standard_signature && !signature)
+      continue;
+    if (!profile->standard_signature &&
+        ((DiskTransferBuffer[0x1fe] == 0x55) !=
+         (DiskTransferBuffer[0x1ff] == 0xaa)))
+      continue;
+    if (pc88va_m16_set_profile(pddt->ddt_driveno, profile->mode,
+                               profile->total, profile->sectors_per_track,
+                               profile->heads) != 0)
+      continue;
+
+    memcpy(pbpbarray, &observed, sizeof(observed));
+    pddt->ddt_ncyl = profile->cylinders;
+    pddt->ddt_descflags &= ~DF_NOACCESS;
+    goto read_extended_bpb;
+  }
+
+  pddt->ddt_descflags |= DF_DISKCHANGE;
+  return saw_read ? failure(E_FAILURE) : failure(E_NOTRDY);
+#else
   /* pddt->ddt_descflags |= DF_NOACCESS; 
    * disabled for now - problems with FORMAT ?? */
 
@@ -397,17 +485,7 @@ STATIC WORD getbpb(ddt * pddt)
   {
     /* copy default bpb to be sure that there is no bogus data */
     memcpy(pbpbarray, &pddt->ddt_defbpb, sizeof(bpb));
-#if defined(PC88VA)
-    /*
-     * PC-88VA media uses the loader's 1024-byte layout and does not carry
-     * the DOS 0x55aa marker at 01feh.  The initialized default BPB is the
-     * authoritative geometry for this target. Continue with the current
-     * sector's extended fields instead of retaining cached media identity.
-     */
-    goto read_extended_bpb;
-#else
     return S_DONE;
-#endif
   }
 
   pddt->ddt_descflags &= ~DF_NOACCESS;  /* set drive to accessible */
@@ -415,10 +493,9 @@ STATIC WORD getbpb(ddt * pddt)
 /*TE ~ 200 bytes*/
 
   memcpy(pbpbarray, &DiskTransferBuffer[BT_BPB], sizeof(bpb));
-
-#if defined(PC88VA)
-read_extended_bpb:
 #endif
+
+read_extended_bpb:
   /*?? */
   /*  2b is fat16 volume label. if memcmp, then offset 0x36.
      if (fstrncmp((BYTE *) & DiskTransferBuffer[0x36], "FAT16",5) == 0  ||

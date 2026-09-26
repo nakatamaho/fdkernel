@@ -125,6 +125,8 @@ SECTIONS
 		_fl_readkey = FL_READKEY;
 		_fl_lba_ReadWrite = FL_LBA_READWRITE;
 		_floppy_change = FLOPPY_CHANGE;
+		_pc88va_m16_probe_read = PC88VA_M16_PROBE_READ;
+		_pc88va_m16_set_profile = PC88VA_M16_SET_PROFILE;
 		_ReadPCClock = READPCCLOCK;
 		_WritePCClock = WRITEPCCLOCK;
 		_WriteATClock = WRITEATCLOCK;

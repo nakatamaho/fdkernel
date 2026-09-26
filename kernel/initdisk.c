@@ -257,10 +257,9 @@ BOOL ExtLBAForce = FALSE;
 COUNT init_readdasd(UBYTE drive)
 {
 #if defined(PC88VA)
-  /* The M14 VA adapter exposes one removable logical drive (A:).  INT 80h
-     AH=09 is the documented door-change query and its conservative CF=1
-     result is used to invalidate common FAT buffers before revalidation. */
-  return drive == 0 ? DF_CHANGELINE : DF_NOACCESS;
+  /* The VA BIOS exposes two independent physical floppy units.  AH=09 is
+     the door-change query used to invalidate common FAT buffers. */
+  return drive < 2 ? DF_CHANGELINE : DF_NOACCESS;
 #else
   static iregs regs;
 
@@ -304,7 +303,7 @@ floppy_bpb floppy_bpbs[5] = {
 COUNT init_getdriveparm(UBYTE drive, bpb * pbpbarray)
 {
 #if defined(PC88VA)
-  if (drive != 0 || pbpbarray == NULL)
+  if (drive > 1 || pbpbarray == NULL)
     return 0;
   memset(pbpbarray, 0, sizeof(*pbpbarray));
   pbpbarray->bpb_nbyte = 1024;
@@ -1300,10 +1299,13 @@ void ReadAllPartitionTables(void)
      initialization stack has a distinct SS, so a local ddt would be passed
      as DS:BP-relative-offset and read from the wrong physical region.  Keep
      this one-shot initialization record in DGROUP instead. */
-  static ddt nddt;
-  memset(&nddt, 0, sizeof(nddt));
-  make_ddt(&nddt, 0, 0, 0);
-  nUnits = 1;
+  static ddt nddt[2];
+  memset(nddt, 0, sizeof(nddt));
+  make_ddt(&nddt[0], 0, 0, 0);
+  /* B: remains inaccessible until its first BPB probe identifies a supported
+     physical medium; a default A: profile must never alias an unknown disk. */
+  make_ddt(&nddt[1], 1, 1, DF_NOACCESS);
+  nUnits = 2;
   return;
 #else
   UBYTE foundPartitions[MAX_HARD_DRIVE];

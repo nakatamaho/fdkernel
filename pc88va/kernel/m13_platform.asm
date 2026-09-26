@@ -261,10 +261,156 @@ FL_DISKCHANGED:
         pop bp
         retf 2
 
+; Read logical sector 1 using an explicit VA floppy mode.  This probe is the
+; common kernel's media-recognition path; it never reads host image metadata.
+; COUNT pc88va_m16_probe_read(WORD drive, WORD mode, UBYTE FAR *buffer).
+global PC88VA_M16_PROBE_READ
+PC88VA_M16_PROBE_READ:
+        push bp
+        mov bp, sp
+        push bx
+        push cx
+        push dx
+        push es
+        pc88va_arg_far drive, mode, {buffer,4}
+        mov ch, byte [.drive]
+        mov al, byte [.mode]
+        mov ah, 0ah
+        int 80h
+        jc .probe_error
+        or ah, ah
+        jnz .probe_error
+        mov ch, byte [.drive]
+        xor cl, cl
+        mov dh, 1
+        mov dl, byte [.mode]
+        and dl, 0fh
+        les bp, [.buffer]
+        mov ax, 8101h
+        int 80h
+        jc .probe_error
+        or ah, ah
+        jnz .probe_error
+        xor ax, ax
+        jmp short .probe_return
+.probe_error:
+        mov al, ah
+        xor ah, ah
+        or ax, ax
+        jnz .probe_return
+        mov ax, 0ffffh
+.probe_return:
+        pop es
+        pop dx
+        pop cx
+        pop bx
+        pop bp
+        retf 8
+
+; Install a validated per-drive BIOS/FDC profile for subsequent block I/O.
+; COUNT pc88va_m16_set_profile(WORD drive, WORD mode, WORD total,
+;                              WORD sectors_per_track, WORD heads).
+global PC88VA_M16_SET_PROFILE
+PC88VA_M16_SET_PROFILE:
+        push bp
+        mov bp, sp
+        push bx
+        push cx
+        push dx
+        pc88va_arg_far drive, mode, total, spt, heads
+        mov ax, [.drive]
+        cmp ax, 1
+        ja .profile_invalid
+        mov ax, [.mode]
+        cmp ax, 0002h
+        je .profile_512
+        cmp ax, 0012h
+        je .profile_512
+        cmp ax, 0022h
+        je .profile_512
+        cmp ax, 0023h
+        jne .profile_invalid
+        mov dx, 1024
+        jmp short .profile_validate
+.profile_512:
+        mov dx, 512
+.profile_validate:
+        mov ax, [.total]
+        or ax, ax
+        jz .profile_invalid
+        mov ax, [.spt]
+        or ax, ax
+        jz .profile_invalid
+        cmp ax, 18
+        ja .profile_invalid
+        mov ax, [.heads]
+        cmp ax, 2
+        jne .profile_invalid
+
+        mov cx, dx
+        mov ax, [.drive]
+        call pc88va_m16_profile_index
+        ; All arguments have been validated before changing the active entry.
+        mov ax, [.mode]
+        mov [cs:pc88va_m16_profiles_+bx+0], ax
+        mov ax, [.total]
+        mov [cs:pc88va_m16_profiles_+bx+2], ax
+        mov ax, [.spt]
+        mov [cs:pc88va_m16_profiles_+bx+4], ax
+        mov ax, [.heads]
+        mov [cs:pc88va_m16_profiles_+bx+6], ax
+        mov [cs:pc88va_m16_profiles_+bx+8], cx
+        xor ax, ax
+        jmp short .profile_return
+.profile_invalid:
+        mov ax, 1
+.profile_return:
+        pop dx
+        pop cx
+        pop bx
+        pop bp
+        retf 10
+
+; AX=physical unit (0 or 1), BX=10-byte profile offset.
+pc88va_m16_profile_index:
+        cmp ax, 1
+        ja .profile_index_invalid
+        mov bx, ax
+        shl bx, 1
+        mov dx, ax
+        shl dx, 1
+        shl dx, 1
+        shl dx, 1
+        add bx, dx
+        clc
+        ret
+.profile_index_invalid:
+        stc
+        ret
+
+; Bind the selected unit's validated geometry to the reusable resident request.
+; AX=physical unit.  Returns AX=0 on success, AX=1 for an invalid unit.
+pc88va_m16_bind_request:
+        call pc88va_m16_profile_index
+        jc .bind_invalid
+        mov [cs:pc88va_m12_request_+RD_DRIVE_CONTEXT], ax
+        mov ax, [cs:pc88va_m16_profiles_+bx+2]
+        mov [cs:pc88va_m12_request_+RD_TOTAL_SECTORS], ax
+        mov ax, [cs:pc88va_m16_profiles_+bx+4]
+        mov [cs:pc88va_m12_request_+RD_SECTORS_TRACK], ax
+        mov ax, [cs:pc88va_m16_profiles_+bx+6]
+        mov [cs:pc88va_m12_request_+RD_HEADS], ax
+        mov ax, [cs:pc88va_m16_profiles_+bx+8]
+        mov [cs:pc88va_m12_request_+RD_SECTOR_BYTES], ax
+        xor ax, ax
+        ret
+.bind_invalid:
+        mov ax, 1
+        ret
+
 ; Common driver read: drive, head, cylinder, sector, count, ES:BX buffer.
-; M12 accepts at most four 1024-byte sectors per request.  The loop preserves
-; completed sectors and copies only the validated resident bytes to the DOS
-; caller.  Segment wrap is rejected before a copy.
+; M12 receives one sector per request.  Geometry and sector bytes come from
+; the profile installed by common-kernel media recognition.
 global FL_READ
 FL_READ:
         push bp
@@ -278,53 +424,51 @@ FL_READ:
         push es
         pc88va_arg_far drive, head, track, sector, count, {buffer,4}
         mov ax, [.drive]
+        call pc88va_m16_bind_request
         or ax, ax
         jnz .bad
+        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
+        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
+        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
         mov ax, [.head]
-        cmp ax, 2
+        cmp ax, [cs:pc88va_m12_request_+RD_HEADS]
         jae .bad
         mov ax, [.sector]
         cmp ax, 1
         jb .bad
-        cmp ax, 8
+        cmp ax, [cs:pc88va_m12_request_+RD_SECTORS_TRACK]
         ja .bad
         mov ax, [.count]
         or ax, ax
         jz .bad
         mov cx, ax
-        mov dx, [.track]
-        cmp dx, 160
+        mov ax, [.track]
+        cmp ax, 80
         jae .bad
-        ; lba = ((cylinder * 2 + head) * 8) + (sector - 1)
-        shl dx, 1
-        add dx, [.head]
-        shl dx, 1
-        shl dx, 1
-        shl dx, 1
-        add dx, [.sector]
+        ; lba = ((cylinder * heads) + head) * sectors/track + sector - 1.
+        shl ax, 1
+        add ax, [.head]
+        mul word [cs:pc88va_m12_request_+RD_SECTORS_TRACK]
+        or dx, dx
+        jnz .bad
+        mov dx, [.sector]
         dec dx
-        mov si, dx
-        add dx, cx
+        add ax, dx
         jc .bad
-        cmp dx, 1280
+        mov si, ax
+        add ax, cx
+        jc .bad
+        cmp ax, [cs:pc88va_m12_request_+RD_TOTAL_SECTORS]
         ja .bad
         les di, [.buffer]
+        mov dx, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
         call pc88va_validate_buffer_request
         jc .bad
 .next:
         ; The full extent was validated before any sector transfer.
-        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_LBA], si
         mov word [cs:pc88va_m12_request_+RD_COUNT], 1
-        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
-        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
-        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
-        mov word [cs:pc88va_m12_request_+RD_TOTAL_SECTORS], 1280
-        mov word [cs:pc88va_m12_request_+RD_SECTORS_TRACK], 8
-        mov word [cs:pc88va_m12_request_+RD_HEADS], 2
-        mov word [cs:pc88va_m12_request_+RD_SECTOR_BYTES], 1024
-        mov ax, [cs:pc88va_m12_drive_context_]
-        mov word [cs:pc88va_m12_request_+RD_DRIVE_CONTEXT], ax
         ; The resident validator requires an explicit qualified far adapter.
         ; Keep the callback binding in the request built for each DOS read;
         ; a zero binding is a contract error, not a firmware result.
@@ -345,8 +489,8 @@ FL_READ:
         push cs
         pop ds
         mov si, pc88va_m12_buffer_
-        mov dx, 512
-        mov cx, dx
+        mov cx, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
+        shr cx, 1
         cld
         rep movsw
         pop ds
@@ -419,18 +563,17 @@ pc88va_map_va_write_status:
         ret
 
 ; Validate the complete CX-sector caller extent before the first transfer.
-; Checking only each successive sector would allow an invalid later buffer
-; boundary to be discovered after an earlier write has already reached disk.
+; DX is the active bytes-per-sector value from the selected drive profile.
 pc88va_validate_buffer_request:
         push ax
         push bx
         push dx
         push di
+        mov bx, dx
         mov ax, cx
         or ax, ax
         jz .request_buffer_invalid
         dec ax
-        mov bx, 1024
         mul bx
         or dx, dx
         jnz .request_buffer_invalid
@@ -438,7 +581,7 @@ pc88va_validate_buffer_request:
         jc .request_buffer_invalid
         ; The last sector has the highest offset and physical end. Neither
         ; the offset arithmetic nor the physical address may wrap.
-        call pc88va_validate_buffer_1024
+        call pc88va_validate_buffer_size
         jmp short .request_buffer_restore
 .request_buffer_invalid:
         stc
@@ -449,15 +592,20 @@ pc88va_validate_buffer_request:
         pop ax
         ret
 
-; Validate the caller's 1024-byte ES:DI transfer without changing the
-; adapter's loop registers.  The VA BIOS requires a contiguous buffer that
-; does not cross FFFFFh; the word copy also cannot wrap the 16-bit offset.
-pc88va_validate_buffer_1024:
+; Validate one profile-sized ES:DI sector without changing adapter registers.
+; BX is bytes per sector. The VA BIOS requires a contiguous transfer that
+; does not cross FFFFFh or wrap the caller's 16-bit offset.
+pc88va_validate_buffer_size:
         push ax
         push dx
         push cx
-        cmp di, 0xfc00
-        ja .buffer_invalid
+        mov ax, di
+        add ax, bx
+        jnc .buffer_offset_valid
+        ; A carry is valid only when the half-open end is exactly 10000h.
+        or ax, ax
+        jnz .buffer_invalid
+.buffer_offset_valid:
         mov ax, es
         mov dx, ax
         mov cl, 12
@@ -466,7 +614,7 @@ pc88va_validate_buffer_1024:
         shl ax, cl
         add ax, di
         adc dx, 0
-        add ax, 1024
+        add ax, bx
         adc dx, 0
         cmp dx, 16
         ja .buffer_invalid
@@ -503,36 +651,44 @@ FL_WRITE:
         push es
         pc88va_arg_far drive, head, track, sector, count, {buffer,4}
         mov ax, [.drive]
+        call pc88va_m16_bind_request
         or ax, ax
         jnz .write_bad
+        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
+        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
+        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
         mov ax, [.head]
-        cmp ax, 2
+        cmp ax, [cs:pc88va_m12_request_+RD_HEADS]
         jae .write_bad
         mov ax, [.sector]
         cmp ax, 1
         jb .write_bad
-        cmp ax, 8
+        cmp ax, [cs:pc88va_m12_request_+RD_SECTORS_TRACK]
         ja .write_bad
         mov ax, [.count]
         or ax, ax
         jz .write_bad
         mov cx, ax
-        mov dx, [.track]
-        cmp dx, 160
+        mov ax, [.track]
+        cmp ax, 80
         jae .write_bad
-        shl dx, 1
-        add dx, [.head]
-        shl dx, 1
-        shl dx, 1
-        shl dx, 1
-        add dx, [.sector]
+        shl ax, 1
+        add ax, [.head]
+        mul word [cs:pc88va_m12_request_+RD_SECTORS_TRACK]
+        or dx, dx
+        jnz .write_bad
+        mov dx, [.sector]
         dec dx
-        mov si, dx
-        add dx, cx
+        add ax, dx
         jc .write_bad
-        cmp dx, 1280
+        mov si, ax
+        add ax, cx
+        jc .write_bad
+        cmp ax, [cs:pc88va_m12_request_+RD_TOTAL_SECTORS]
         ja .write_bad
         les di, [.buffer]
+        mov dx, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
         call pc88va_validate_buffer_request
         jc .write_bad
 .write_next:
@@ -548,7 +704,8 @@ FL_WRITE:
         push cs
         pop es
         mov di, pc88va_m12_buffer_
-        mov cx, 512
+        mov cx, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
+        shr cx, 1
         cld
         rep movsw
         pop es
@@ -556,18 +713,8 @@ FL_WRITE:
         pop di
         pop si
         pop cx
-        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_LBA], si
         mov word [cs:pc88va_m12_request_+RD_COUNT], 1
-        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
-        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
-        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
-        mov word [cs:pc88va_m12_request_+RD_TOTAL_SECTORS], 1280
-        mov word [cs:pc88va_m12_request_+RD_SECTORS_TRACK], 8
-        mov word [cs:pc88va_m12_request_+RD_HEADS], 2
-        mov word [cs:pc88va_m12_request_+RD_SECTOR_BYTES], 1024
-        mov ax, [cs:pc88va_m12_drive_context_]
-        mov word [cs:pc88va_m12_request_+RD_DRIVE_CONTEXT], ax
         mov word [cs:pc88va_m12_request_+RD_ADAPTER_OFFSET], pc88va_kernel_firmware_write_one_
         mov word [cs:pc88va_m12_request_+RD_ADAPTER_SEGMENT], cs
         mov word [cs:pc88va_m12_request_+RD_RETRIES], 3
@@ -587,7 +734,8 @@ FL_WRITE:
         inc si
         dec cx
         jz .write_complete
-        add di, 1024
+        mov ax, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
+        add di, ax
         jc .write_bad
         jmp .write_next
 .write_complete:
@@ -622,52 +770,50 @@ FL_VERIFY:
         push es
         pc88va_arg_far drive, head, track, sector, count, {buffer,4}
         mov ax, [.drive]
+        call pc88va_m16_bind_request
         or ax, ax
         jnz .verify_bad
+        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
+        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
+        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
         mov ax, [.head]
-        cmp ax, 2
+        cmp ax, [cs:pc88va_m12_request_+RD_HEADS]
         jae .verify_bad
         mov ax, [.sector]
         cmp ax, 1
         jb .verify_bad
-        cmp ax, 8
+        cmp ax, [cs:pc88va_m12_request_+RD_SECTORS_TRACK]
         ja .verify_bad
         mov ax, [.count]
         or ax, ax
         jz .verify_bad
         mov cx, ax
-        mov dx, [.track]
-        cmp dx, 160
+        mov ax, [.track]
+        cmp ax, 80
         jae .verify_bad
-        shl dx, 1
-        add dx, [.head]
-        shl dx, 1
-        shl dx, 1
-        shl dx, 1
-        add dx, [.sector]
+        shl ax, 1
+        add ax, [.head]
+        mul word [cs:pc88va_m12_request_+RD_SECTORS_TRACK]
+        or dx, dx
+        jnz .verify_bad
+        mov dx, [.sector]
         dec dx
-        mov si, dx
-        add dx, cx
+        add ax, dx
         jc .verify_bad
-        cmp dx, 1280
+        mov si, ax
+        add ax, cx
+        jc .verify_bad
+        cmp ax, [cs:pc88va_m12_request_+RD_TOTAL_SECTORS]
         ja .verify_bad
         les di, [.buffer]
+        mov dx, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
         call pc88va_validate_buffer_request
         jc .verify_bad
 .verify_next:
         ; The full extent was validated before any sector transfer.
-        mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_LBA], si
         mov word [cs:pc88va_m12_request_+RD_COUNT], 1
-        mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
-        mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
-        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
-        mov word [cs:pc88va_m12_request_+RD_TOTAL_SECTORS], 1280
-        mov word [cs:pc88va_m12_request_+RD_SECTORS_TRACK], 8
-        mov word [cs:pc88va_m12_request_+RD_HEADS], 2
-        mov word [cs:pc88va_m12_request_+RD_SECTOR_BYTES], 1024
-        mov ax, [cs:pc88va_m12_drive_context_]
-        mov word [cs:pc88va_m12_request_+RD_DRIVE_CONTEXT], ax
         mov word [cs:pc88va_m12_request_+RD_ADAPTER_OFFSET], pc88va_kernel_firmware_read_one_
         mov word [cs:pc88va_m12_request_+RD_ADAPTER_SEGMENT], cs
         mov word [cs:pc88va_m12_request_+RD_RETRIES], 3
@@ -691,7 +837,8 @@ FL_VERIFY:
         push cs
         pop es
         mov di, pc88va_m12_buffer_
-        mov cx, 512
+        mov cx, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
+        shr cx, 1
         cld
         repe cmpsw
         pop es
@@ -704,7 +851,8 @@ FL_VERIFY:
         inc si
         dec cx
         jz .verify_complete
-        add di, 1024
+        mov ax, [cs:pc88va_m12_request_+RD_SECTOR_BYTES]
+        add di, ax
         jc .verify_bad
         jmp .verify_next
 .verify_complete:
@@ -761,3 +909,11 @@ global FLOPPY_CHANGE
 FLOPPY_CHANGE:
         mov ax, 0ffffh
         ret
+
+; The initial A: and B: entries preserve the exact M15 1024-byte profile
+; until runtime media recognition installs a validated BPB-derived profile.
+align 2, db 0
+global pc88va_m16_profiles_
+pc88va_m16_profiles_:
+        dw 0023h, 1280, 8, 2, 1024
+        dw 0023h, 1280, 8, 2, 1024
