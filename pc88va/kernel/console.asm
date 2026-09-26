@@ -61,7 +61,7 @@ ConStatusError:
 segment _PC88VA_CODE class=CODE public use16
 extern _IODone, _IOErrorExit, _ReqPktPtr
 extern pc88va_console_getc_dos_, pc88va_console_peek_dos_, pc88va_console_read_dos_
-extern pc88va_m11_character_, m11_pending_valid
+extern pc88va_m11_character_, pc88va_m16_input_flush_
 
 global _kbdType
 _kbdType:        db 0
@@ -91,6 +91,7 @@ pc88va_dos_peek_:
 
 global ConInit, ConRead, ConInpFlush, ConWrite, CommonNdRdExit
 ConInit:
+                call pc88va_m16_input_flush_
                 jmp far _IOExit
 
 ConRead:
@@ -136,7 +137,7 @@ CommonNdReadyDone:
                 jmp far _IOExit
 
 ConInpFlush:
-                mov byte [cs:m11_pending_valid], 0
+                call pc88va_m16_input_flush_
                 jmp far _IOExit
 
 ConWrite:

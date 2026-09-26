@@ -32,6 +32,8 @@ class InputTests(unittest.TestCase):
             source.write_text('bits 16\ncpu 8086\norg 0\njmp near pc88va_console_getc_\n'
                               'dw pc88va_m11_character_, pc88va_m11_storage_begin, pc88va_m11_storage_end\n'
                               f'pc88va_m10_state_: db {ready}\n'
+                              'pc88va_m10_clock_record_: dw 1,0,0\n'
+                              'pc88va_clock_read_: xor ax,ax\nret\n'
                               '%define M11_FLAT_TEST 1\n%include "console_input.asm"\n')
             subprocess.run(['nasm','-f','bin','-DPC88VA','-I',str(TARGET/'kernel')+'/',
                             '-o',str(binary),str(source)],check=True,capture_output=True)

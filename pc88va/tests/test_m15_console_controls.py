@@ -42,13 +42,13 @@ class DosControlTests(ConsumerTests):
                 self.assertEqual(self.invoke(self.read, matrix(position)), 0)
                 self.assertEqual(self.character_word(), expected)
 
-    def test_other_modes_and_multiple_letters_still_rejected(self):
+    def test_other_modes_and_multiple_letters_are_ignored_by_dos(self):
         for positions in ((0x84, 0x23), (0x85, 0x23), (0xa7, 0x23),
                           (0x87, 0x21, 0x22), (0x87, 0x60)):
             with self.subTest(positions=positions):
                 self.setUp()
                 self.assertEqual(self.invoke(self.read, matrix()), 1)
-                self.assertEqual(self.invoke(self.read, matrix(*positions)), 2)
+                self.assertEqual(self.invoke(self.read, matrix(*positions)), 1)
 
 
 if __name__ == '__main__':

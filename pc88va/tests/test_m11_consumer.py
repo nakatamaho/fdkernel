@@ -36,7 +36,22 @@ class ConsumerTests(unittest.TestCase):
                 "jmp near consumer_entry\n"
                 "dw pc88va_console_peek_dos_, pc88va_console_read_dos_\n"
                 "dw pc88va_m11_character_, pc88va_m11_storage_begin, pc88va_m11_storage_end\n"
+                "dw pc88va_m16_storage_begin, pc88va_m16_storage_end\n"
+                "dw pc88va_m16_input_flush_, pc88va_m16_queue_, pc88va_m16_count_\n"
+                "dw m16_second_valid, m16_repeat_owner, m16_enqueue\n"
                 "pc88va_m10_state_: db 2\n"
+                "pc88va_m10_clock_record_: dw 1,0,0\n"
+                "pc88va_clock_read_:\n"
+                "cmp ax,pc88va_m10_clock_record_\n"
+                "jne .bad_clock\n"
+                "mov ax,ds\n"
+                "mov dx,cs\n"
+                "cmp ax,dx\n"
+                "jne .bad_clock\n"
+                "add word [cs:pc88va_m10_clock_record_+2], 10\n"
+                "adc word [cs:pc88va_m10_clock_record_+4], 0\n"
+                "xor ax,ax\nret\n"
+                ".bad_clock: mov ax,0ffffh\nret\n"
                 "%define M11_FLAT_TEST 1\n"
                 "%include \"console_input.asm\"\n"
                 "consumer_entry:\n"
@@ -49,7 +64,9 @@ class ConsumerTests(unittest.TestCase):
             )
             cls.code = binary.read_bytes()
         (cls.peek, cls.read, cls.character, cls.storage_begin,
-         cls.storage_end) = struct.unpack_from("<HHHHH", cls.code, 3)
+         cls.storage_end, cls.m16_storage_begin, cls.m16_storage_end,
+         cls.flush, cls.queue, cls.queue_count, cls.second_valid,
+         cls.repeat_owner, cls.enqueue) = struct.unpack_from("<" + "H" * 13, cls.code, 3)
 
     def setUp(self):
         self.cpu = Uc(UC_ARCH_X86, UC_MODE_16)
@@ -66,18 +83,26 @@ class ConsumerTests(unittest.TestCase):
 
         self.cpu.hook_add(UC_HOOK_INSN, port_in, None, 1, 0, UC_X86_INS_IN)
 
-    def invoke(self, entry, snapshot):
+    def invoke(self, entry, snapshot, ax=None):
         self.current[0] = snapshot
+        regs = {UC_X86_REG_BX: 0x1357, UC_X86_REG_CX: 0x2468,
+                UC_X86_REG_DX: 0x4567, UC_X86_REG_SI: 0x3456,
+                UC_X86_REG_DI: 0x5678, UC_X86_REG_BP: 0x6789,
+                UC_X86_REG_DS: CODE, UC_X86_REG_ES: 0x4000,
+                UC_X86_REG_SS: STACK, UC_X86_REG_EFLAGS: 0x202}
+        for reg, value in regs.items():
+            self.cpu.reg_write(reg, value)
         self.cpu.reg_write(UC_X86_REG_CS, CODE)
-        self.cpu.reg_write(UC_X86_REG_DS, CODE)
-        self.cpu.reg_write(UC_X86_REG_SS, STACK)
         self.cpu.reg_write(UC_X86_REG_SP, 0x1000)
         self.cpu.reg_write(UC_X86_REG_IP, entry)
-        self.cpu.reg_write(UC_X86_REG_AX, self.character)
+        self.cpu.reg_write(UC_X86_REG_AX, self.character if ax is None else ax)
         self.cpu.mem_write(STACK * 16 + 0x1000, struct.pack("<H", STOP))
         self.cpu.emu_start(CODE * 16 + entry, CODE * 16 + STOP, count=10000)
         self.assertEqual(self.cpu.reg_read(UC_X86_REG_IP), STOP)
         self.assertEqual(self.cpu.reg_read(UC_X86_REG_SP), 0x1002)
+        if entry != self.enqueue:
+            for reg, value in regs.items():
+                self.assertEqual(self.cpu.reg_read(reg), value, hex(reg))
         return self.cpu.reg_read(UC_X86_REG_AX)
 
     def test_peek_is_repeatable_and_read_consumes_once(self):
