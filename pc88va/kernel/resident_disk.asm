@@ -123,7 +123,6 @@ pc88va_kernel_firmware_read_one_:
         or cx, [si+34]
         mov ax, [si+20]
         mov ch, al
-        mov dh, [si+36]
         mov bx, ax
         shl bx, 1
         mov dx, bx
@@ -132,6 +131,11 @@ pc88va_kernel_firmware_read_one_:
         add bx, dx
         mov dl, [cs:pc88va_m16_profiles_+bx]
         and dl, 0fh
+        ; The profile index calculation uses BX and DX, which otherwise
+        ; clobber the firmware's cylinder/head and sector registers.
+        mov bh, [si+32]
+        mov bl, [si+34]
+        mov dh, [si+36]
         mov ax, 8101h
         push si
         push word [cs:pc88va_m12_call_flags_]
@@ -193,7 +197,6 @@ pc88va_kernel_firmware_write_one_:
         or cx, [si+34]
         mov ax, [si+20]
         mov ch, al
-        mov dh, [si+36]
         mov bx, ax
         shl bx, 1
         mov dx, bx
@@ -202,6 +205,10 @@ pc88va_kernel_firmware_write_one_:
         add bx, dx
         mov dl, [cs:pc88va_m16_profiles_+bx]
         and dl, 0fh
+        ; Keep the firmware's CHS registers out of the profile-index scratch.
+        mov bh, [si+32]
+        mov bl, [si+34]
+        mov dh, [si+36]
         mov ax, 8201h
         push si
         push word [cs:pc88va_m12_call_flags_]

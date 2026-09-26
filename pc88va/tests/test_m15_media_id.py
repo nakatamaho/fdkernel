@@ -26,11 +26,14 @@ HEADER = r'''
 #define FAR
 #define BT_BPB 11
 #define M_NOT_CHANGED 1
+#define FALSE 0
+#define TRUE 1
 #define DF_DISKCHANGE 2
 #define DF_NOACCESS 512
 #define S_DONE 256
 #define E_MEDIA 7
 #define E_FAILURE 12
+#define E_NOTRDY 15
 #define LBA_READ 0
 #define LBA_WRITE 1
 #define hd(x) 0
@@ -45,7 +48,7 @@ typedef int WORD;
 HARNESS = r'''
 #pragma pack(pop)
 typedef struct { bpb ddt_bpb,ddt_defbpb; unsigned ddt_descflags,ddt_ncyl;
-    ULONG ddt_serialno; char ddt_volume[11],ddt_fstype[8]; } ddt;
+    ULONG ddt_serialno; char ddt_volume[11],ddt_fstype[8]; unsigned ddt_driveno; } ddt;
 typedef struct { struct Gioc_media *r_gioc; } *rqptr;
 static UBYTE DiskTransferBuffer[1024], media[1024];
 static unsigned writes, read_error, write_error;
@@ -66,6 +69,16 @@ static int RWzero(ddt *d, unsigned mode) {
         memcpy(media,DiskTransferBuffer,sizeof(media));
     }
     return 0;
+}
+static int pc88va_m16_probe_read(unsigned drive, unsigned mode, void *buffer) {
+    if (drive > 1 || mode != 0x23 || read_error) return 1;
+    memcpy(buffer, media, sizeof(media));
+    return 0;
+}
+static int pc88va_m16_set_profile(unsigned drive, unsigned mode, unsigned total,
+                                  unsigned spt, unsigned heads) {
+    return drive == 0 && mode == 0x23 && total == 1280 && spt == 8 && heads == 2
+        ? 0 : 1;
 }
 '''
 MAIN = r'''
@@ -154,7 +167,8 @@ class MediaIdTests(unittest.TestCase):
         for va in (False, True):
             binary = root / ('va' if va else 'pc')
             built = subprocess.run([os.environ.get('CC', 'cc'), '-std=c99',
-                                    '-Wall', '-Wextra', '-Werror',
+                                    '-Wall', '-Wextra', '-Werror', '-Wno-unused-label',
+                                    '-Wno-unused-function',
                                     *(['-DPC88VA'] if va else []),
                                     str(probe), '-o', str(binary)],
                                    capture_output=True, text=True)

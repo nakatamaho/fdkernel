@@ -32,10 +32,11 @@ class M14TargetTests(unittest.TestCase):
                      "DISK_RANGE", "DISK_CAPACITY", "DISK_SHORT"):
             self.assertIn(text, core)
         adapter = (TARGET / "kernel/m13_platform.asm").read_text(encoding="utf-8")
-        self.assertIn("cmp di, 0xfc00", adapter)
-        self.assertIn("pc88va_validate_buffer_1024", adapter)
-        self.assertIn("add dx, cx\n        jc .write_bad", adapter)
-        self.assertIn("add dx, cx\n        jc .verify_bad", adapter)
+        self.assertIn("call pc88va_validate_buffer_size", adapter)
+        self.assertIn("mov bx, dx\n        mov ax, cx", adapter)
+        self.assertIn("add ax, bx\n        jnc .buffer_offset_valid", adapter)
+        self.assertIn("add ax, cx\n        jc .write_bad", adapter)
+        self.assertIn("add ax, cx\n        jc .verify_bad", adapter)
         self.assertIn("retf 14", adapter)
 
     def test_va_status_and_change_contract_are_not_silent_success(self):
@@ -50,7 +51,7 @@ class M14TargetTests(unittest.TestCase):
         initdisk = (TARGET.parent / "kernel/initdisk.c").read_text(encoding="utf-8")
         dsk = (TARGET.parent / "kernel/dsk.c").read_text(encoding="utf-8")
         fatfs = (TARGET.parent / "kernel/fatfs.c").read_text(encoding="utf-8")
-        self.assertIn("return drive == 0 ? DF_CHANGELINE : DF_NOACCESS", initdisk)
+        self.assertIn("make_ddt(&nddt[1], 1, 1, DF_NOACCESS)", initdisk)
         self.assertIn("rp->r_count > size - start", dsk)
         self.assertIn("retry_limit = 1", dsk)
         self.assertIn("count > 1", dsk)

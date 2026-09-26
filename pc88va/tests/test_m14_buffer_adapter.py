@@ -25,15 +25,17 @@ class BufferAdapterTests(unittest.TestCase):
             raise RuntimeError("M14 execution QA requires pinned Unicorn 2.1.4")
         adapter = (TARGET / "kernel/m13_platform.asm").read_text()
         macro = '%macro pc88va_arg_far' + adapter.split('%macro pc88va_arg_far', 1)[1].split('%endmacro', 1)[0] + '%endmacro\n'
+        helpers = adapter.split('; Install a validated per-drive BIOS/FDC profile for subsequent block I/O.\n', 1)[1].split('; Common driver read', 1)[0]
         code = 'FL_READ:\n' + adapter.split('FL_READ:\n', 1)[1].split('; Format and the legacy', 1)[0]
         text = ('bits 16\ncpu 8086\norg 0\n%define PASCAL 1\n%define XCPU 86\n'
                 '%include "stacks.inc"\n%include "loader_abi.inc"\n' + macro +
                 'dw FL_READ, FL_WRITE, FL_VERIFY, pc88va_kernel_disk_read_, '
-                'pc88va_kernel_disk_write_, pc88va_m12_request_, pc88va_m12_buffer_\n' + code +
+                'pc88va_kernel_disk_write_, pc88va_m12_request_, pc88va_m12_buffer_\n' + helpers + code +
                 '\npc88va_kernel_disk_read_: ret\npc88va_kernel_disk_write_: ret\n'
                 'pc88va_kernel_firmware_read_one_: retf\npc88va_kernel_firmware_write_one_: retf\n'
                 'pc88va_m12_drive_context_: dw 0\npc88va_m12_request_: times 48 db 0\n'
-                'pc88va_m12_buffer_: times 4096 db 0\n')
+                'pc88va_m12_buffer_: times 4096 db 0\n'
+                'pc88va_m16_profiles_: dw 0023h,1280,8,2,1024,0023h,1280,8,2,1024\n')
         with tempfile.TemporaryDirectory(prefix="m14-buffer-adapter-") as directory:
             source, binary = Path(directory) / 'adapter.asm', Path(directory) / 'adapter.bin'
             source.write_text(text)
