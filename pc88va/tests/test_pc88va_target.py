@@ -34,6 +34,11 @@ class TargetTests(unittest.TestCase):
         self.assertEqual(lines.count("library build/platform.lib"), 1)
         self.assertFalse(any("nec98" in line.lower() or "ibmpc" in line.lower() for line in lines))
 
+    def test_common_linker_keeps_pc88va_m16_aliases_optional(self) -> None:
+        linker = (TARGET.parent / "kernel/kernel.ld").read_text(encoding="utf-8")
+        self.assertIn("PROVIDE(PC88VA_M16_PROBE_READ = 0);", linker)
+        self.assertIn("PROVIDE(PC88VA_M16_SET_PROFILE = 0);", linker)
+
     def test_object_plan_has_closed_classifications(self) -> None:
         plan = json.loads((TARGET / "config/build-plan.json").read_text(encoding="utf-8"))
         allowed = {"common-core", "shared-portable", "pc88va-owned", "temporary-fail-closed-stub"}
