@@ -34,7 +34,7 @@ def definitions(profile):
     keys(profile, ("schema_version", "profile_class", "regions", "firmware_regions", "stack", "disk", "cache"))
     if type(profile["schema_version"]) is not int or profile["schema_version"] != 1:
         raise ProfileError("Unsupported profile version")
-    if profile["profile_class"] not in ("synthetic_rom_free", "private_observation_overlay"):
+    if profile["profile_class"] not in ("synthetic_rom_free", "public_platform_profile", "private_observation_overlay"):
         raise ProfileError("Profile privacy class is required")
     names = ("stage2", "loader_stack", "scratch", "kernel_file", "kernel_allocation")
     keys(profile["regions"], names)

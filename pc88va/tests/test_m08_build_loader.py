@@ -23,6 +23,14 @@ def overlay():
 
 
 class BuildLoaderTests(unittest.TestCase):
+    def test_public_platform_profile_retains_validation(self):
+        value = overlay()
+        value["layout"]["profile_class"] = "public_platform_profile"
+        self.assertEqual(validate_overlay(value), value)
+        value["layout"]["regions"]["scratch"] = value["layout"]["regions"]["stage2"]
+        with self.assertRaises(ProfileError):
+            validate_overlay(value)
+
     def test_closed_overlay_schema(self):
         value = overlay()
         self.assertEqual(validate_overlay(value), value)
