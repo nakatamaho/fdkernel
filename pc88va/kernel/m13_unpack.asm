@@ -87,9 +87,17 @@ org 0
 %ifndef M13_RING_OFFSET
 %define M13_RING_OFFSET 0
 %endif
+%ifndef M13_RING_SEG
+%if M13_IN_PLACE
+%define M13_RING_SEG M13_FILE_SEG
+%else
+%define M13_RING_SEG M13_SCRATCH_SEG
+%endif
+%endif
 %define M13_RING_BYTES 4096
+%define M13_EXTERNAL_RING (M13_IN_PLACE && (M13_RING_SEG != M13_FILE_SEG))
 %if M13_IN_PLACE && (M13_RING_OFFSET + M13_RING_BYTES) > 0xFFF0
-%error Low-staging history ring exceeds the owned 65520-byte carrier extent
+%error Low-staging history ring exceeds its owned segment extent
 %endif
 
 ; The bootstrap runs at the transformed allocation base.  In low-staging mode
@@ -164,20 +172,25 @@ m13_unpack_run:
     rep movsb
 %endif
 
-    ; Clear the 4 KiB history window and set DS to the source/ring segment.
+    ; Clear the 4 KiB history window. In the external-ring low-staging mode,
+    ; CS remains the compressed source and DS becomes the separate ring.
 %if M13_IN_PLACE
     mov ax, M13_FILE_SEG
     mov ds, ax
-    mov es, ax
 %else
     mov ax, M13_SCRATCH_SEG
     mov ds, ax
-    mov es, ax
 %endif
+    mov ax, M13_RING_SEG
+    mov es, ax
     mov di, M13_RING_OFFSET
     xor al, al
     mov cx, M13_RING_BYTES
     rep stosb
+%if M13_EXTERNAL_RING
+    mov ax, M13_RING_SEG
+    mov ds, ax
+%endif
     mov ax, M13_IMAGE_SEG
     mov es, ax
     xor di, di
@@ -362,7 +375,11 @@ m13_next_flag:
     cmp word [cs:m13_source], M13_SOURCE_END
     jae .bad
     mov bx, [cs:m13_source]
+%if M13_EXTERNAL_RING
+    mov al, [cs:bx]
+%else
     mov al, [ds:bx]
+%endif
     mov [cs:m13_flags], al
     inc word [cs:m13_source]
     mov byte [cs:m13_flag_bits], 8
@@ -385,7 +402,11 @@ m13_next_byte:
     cmp word [cs:m13_source], M13_SOURCE_END
     jae .bad
     mov bx, [cs:m13_source]
+%if M13_EXTERNAL_RING
+    mov al, [cs:bx]
+%else
     mov al, [ds:bx]
+%endif
     inc word [cs:m13_source]
     clc
     ret
