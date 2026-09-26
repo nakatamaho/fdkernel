@@ -33,6 +33,25 @@ class M16InputTests(ConsumerTests):
                 self.read_extended((position,), code)
                 self.assertEqual(self.invoke(self.read, matrix(position)), 1)
 
+    def test_vaeg_f6_f10_compatibility_aliases_are_one_function_key(self):
+        # VAEG mirrors each row-12 F6-F10 contact onto row-9 F1-F5.
+        for index in range(5):
+            position = 0xc0 + index
+            alias = 0x91 + index
+            with self.subTest(position=hex(position), alias=hex(alias)):
+                self.setUp()
+                self.start_from_released()
+                self.read_extended((position, alias), 0x40 + index)
+                self.assertEqual(self.invoke(self.read, matrix(position, alias)), 1)
+
+    def test_shifted_f10_with_vaeg_alias_and_unrelated_chord(self):
+        self.start_from_released()
+        self.read_extended((0xe2, 0x95, 0xc4), 0x89)
+
+        self.setUp()
+        self.start_from_released()
+        self.assertEqual(self.invoke(self.read, matrix(0x46, 0x95, 0xc4)), 1)
+
     def test_editing_keys_and_cursor_keys(self):
         cases = [(0x81, 0x48), (0xa1, 0x50), (0xa2, 0x4b), (0x82, 0x4d),
                  (0x80, 0x47), (0xa3, 0x4f), (0xc6, 0x52), (0xc7, 0x53)]

@@ -132,6 +132,17 @@ m11_not_shift_alias:
         jne m11_not_shift
         and al, 0f3h
 m11_not_shift:
+        cmp si, 9
+        jne m11_not_function_alias
+        ; VAEG mirrors row-12 F6-F10 contacts onto their row-9 F1-F5
+        ; compatibility aliases. Count the physical row-12 make once.
+        mov dl, [cs:m11_current+12]
+        not dl
+        shl dl, 1
+        and dl, 03eh
+        not dl
+        and al, dl
+m11_not_function_alias:
         mov dx, si
         shl dx, 1
         shl dx, 1
