@@ -81,6 +81,13 @@ static int pc88va_m16_set_profile(unsigned drive, unsigned mode, unsigned total,
         ? 0 : 1;
 }
 '''
+HARNESS += r'''
+static int fl_read(unsigned drive, unsigned head, unsigned cyl, unsigned sector,
+                   unsigned count, void *buffer) {
+    (void)drive; (void)head; (void)cyl; (void)sector; (void)count; (void)buffer;
+    assert(0); return 1;
+}
+'''
 MAIN = r'''
 int main(int argc, char **argv) {
     ddt disk={0};

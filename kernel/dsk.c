@@ -408,6 +408,7 @@ STATIC WORD getbpb(ddt * pddt)
   };
   unsigned profile_index;
   UBYTE saw_read = FALSE;
+  UBYTE legacy_native = FALSE;
 
   /* pddt->ddt_descflags |= DF_NOACCESS;
    * disabled for now - problems with FORMAT ?? */
@@ -434,6 +435,11 @@ STATIC WORD getbpb(ddt * pddt)
     signature = DiskTransferBuffer[0x1fe] == 0x55 &&
                 DiskTransferBuffer[0x1ff] == 0xaa;
     memcpy(&observed, raw_bpb, sizeof(observed));
+    /* A plausible BPB must pass the normal validator, never a fallback. */
+    if (profile->mode == 0x23 && observed.bpb_nbyte != 512 &&
+        observed.bpb_nbyte != 1024 && !signature &&
+        DiskTransferBuffer[0x26] != 0x28 && DiskTransferBuffer[0x26] != 0x29)
+      legacy_native = TRUE;
 
     if (observed.bpb_nbyte != profile->sector_bytes ||
         observed.bpb_nsize != profile->total || observed.bpb_huge != 0 ||
@@ -464,6 +470,35 @@ STATIC WORD getbpb(ddt * pddt)
     goto read_extended_bpb;
   }
 
+  /* Native legacy FAT12 has no boot BPB.  Recognition is read-only while
+     DF_NOACCESS remains set: require both FAT reserved entries and the final
+     sector of the explicit native profile.  Do not infer a writable layout
+     from an unreadable boot sector or arbitrary unrecognized BPB fields. */
+  if (legacy_native &&
+      pc88va_m16_set_profile(pddt->ddt_driveno, 0x23, 1232, 8, 2) == 0)
+  {
+    static const bpb native_bpb = {1024, 1, 1, 2, 192, 1232,
+                                   0xfe, 2, 8, 2, 0, 0};
+    unsigned fat_sector;
+    for (fat_sector = 2; fat_sector <= 4; fat_sector += 2)
+    {
+      if (fl_read(pddt->ddt_driveno, 0, 0, fat_sector, 1,
+                  (UBYTE FAR *)DiskTransferBuffer) != 0 ||
+          DiskTransferBuffer[0] != 0xfe || DiskTransferBuffer[1] != 0xff ||
+          DiskTransferBuffer[2] != 0xff)
+        break;
+    }
+    if (fat_sector == 6 &&
+        fl_read(pddt->ddt_driveno, 1, 76, 8, 1,
+                (UBYTE FAR *)DiskTransferBuffer) == 0)
+    {
+      memcpy(pbpbarray, &native_bpb, sizeof(native_bpb));
+      pddt->ddt_descflags &= ~DF_NOACCESS;
+      /* The buffer now contains data, not an extended boot record. */
+      DiskTransferBuffer[0x26] = 0;
+      goto read_extended_bpb;
+    }
+  }
   pddt->ddt_descflags |= DF_DISKCHANGE;
   return saw_read ? failure(E_FAILURE) : failure(E_NOTRDY);
 #else
