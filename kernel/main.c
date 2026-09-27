@@ -403,7 +403,12 @@ STATIC void init_kernel(void)
 #if defined(PC88VA)
   /* Keep the final assembly text after the low resident prefix. INIT code
      and its stack are separately placed; the old text bounds NEAR Dyn. */
-  if (m13_layout.version != 1 ||
+  if (ram_top < 256 || ram_top > 640 || (ram_top & 127) != 0 ||
+      m13_layout.version != 1 ||
+      ((ULONG)m13_layout.init_segment << 4) + m13_layout.init_bytes >
+        (ULONG)ram_top * 1024UL ||
+      ((ULONG)m13_layout.init_stack_segment << 4) + m13_layout.init_stack_bytes >
+        (ULONG)ram_top * 1024UL ||
       (m13_layout.memory_top_segment != PC88VA_LAYOUT_RUNTIME_MEMORY_TOP &&
        m13_layout.memory_top_segment != (ULONG)ram_top * 64UL))
     init_fatal("PC88VA placement descriptor");

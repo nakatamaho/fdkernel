@@ -79,8 +79,10 @@ PC88VA_MEMORY_KB:
         pushf
         cli
         push bx
+        push cx
         push dx
         push si
+        push di
         push es
 
         mov dx, 0152h
@@ -105,6 +107,39 @@ PC88VA_MEMORY_KB:
         mov bl, 128
         mul bl
         mov si, ax
+
+        ; A saved selection can exceed installed RAM after a configuration
+        ; change. Bound it by writable conventional RAM before creating the
+        ; DOS arena. Probe the last word of each supported 128 KiB step,
+        ; starting at the minimum capacity, and restore every sampled word.
+        ; Two complementary patterns reject open bus and read-only storage.
+        ; The low-staging carrier leaves these boundary words outside its
+        ; live image, INIT, and stack intervals. Interrupts remain disabled.
+        mov cx, 256
+        xor di, di
+.memory_probe:
+        mov ax, cx
+        mov dx, 64
+        mul dx
+        dec ax
+        mov es, ax
+        mov bx, [es:000eh]
+        mov word [es:000eh], 055aah
+        cmp word [es:000eh], 055aah
+        jne .memory_probe_failed
+        mov word [es:000eh], 0aa55h
+        cmp word [es:000eh], 0aa55h
+        jne .memory_probe_failed
+        mov [es:000eh], bx
+        mov di, cx
+        add cx, 128
+        cmp cx, si
+        jbe .memory_probe
+        jmp short .memory_probe_done
+.memory_probe_failed:
+        mov [es:000eh], bx
+.memory_probe_done:
+        mov si, di
         jmp short .memory_restore
 
 .memory_invalid:
@@ -116,8 +151,10 @@ PC88VA_MEMORY_KB:
         out dx, ax
         mov ax, si
         pop es
+        pop di
         pop si
         pop dx
+        pop cx
         pop bx
         popf
         retf
