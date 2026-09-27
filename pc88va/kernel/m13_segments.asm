@@ -10,3 +10,7 @@ global _m13_layout
 _m13_layout:
         db 'M13PLAN1'
         times 8 dw 0
+global _m16_boot_layout
+_m16_boot_layout:
+        db 'M16BOOT1'
+        times 6 dw 0

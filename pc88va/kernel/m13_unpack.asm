@@ -103,8 +103,14 @@ org 0
 ; The bootstrap runs at the transformed allocation base.  In low-staging mode
 ; that is already the immutable kernel-file segment; the ordinary path moves
 ; the bridge there before any output is written.
+%include "m16_runtime.inc"
+
 m13_unpack_start:
     cli
+%ifdef M16_BOOT_RECORD_OFFSET
+    jmp m16_prepare
+%endif
+m13_unpack_start_ready:
 %if M13_IN_PLACE
     ; The MZ transform has already moved the body to offset zero in the
     ; low staging segment.  Keep the bridge in place and use a separate
@@ -123,13 +129,13 @@ m13_unpack_start:
     mov ax, M13_LOAD_SEG
     mov ds, ax
     mov [cs:m13_saved_dx], dx
-    mov ax, M13_FILE_SEG
+    M13_MOV_FILE ax
     mov es, ax
     xor si, si
     xor di, di
     mov cx, m13_unpack_end - m13_unpack_start
     rep movsb
-    mov ax, M13_FILE_SEG
+    M13_MOV_FILE ax
     push ax
     mov ax, m13_unpack_run
     push ax
@@ -138,7 +144,7 @@ m13_unpack_start:
 
 m13_unpack_run:
     ; The copied bridge owns a safe stack outside both output intervals.
-    mov ax, M13_BRIDGE_STACK_SEG
+    M13_MOV_STACK ax
     mov ss, ax
     mov sp, M13_BRIDGE_STACK_SP
     cld
@@ -164,7 +170,7 @@ m13_unpack_run:
 %if M13_BRIDGE_IN_ALLOCATION
     mov ax, M13_SCRATCH_SEG
 %else
-    mov ax, M13_FILE_SEG
+    M13_MOV_FILE ax
 %endif
     mov es, ax
     mov di, M13_RELOC_SOURCE_OFFSET
@@ -175,23 +181,23 @@ m13_unpack_run:
     ; Clear the 4 KiB history window. In the external-ring low-staging mode,
     ; CS remains the compressed source and DS becomes the separate ring.
 %if M13_IN_PLACE
-    mov ax, M13_FILE_SEG
+    M13_MOV_FILE ax
     mov ds, ax
 %else
     mov ax, M13_SCRATCH_SEG
     mov ds, ax
 %endif
-    mov ax, M13_RING_SEG
+    M13_MOV_RING ax
     mov es, ax
     mov di, M13_RING_OFFSET
     xor al, al
     mov cx, M13_RING_BYTES
     rep stosb
 %if M13_EXTERNAL_RING
-    mov ax, M13_RING_SEG
+    M13_MOV_RING ax
     mov ds, ax
 %endif
-    mov ax, M13_IMAGE_SEG
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG
     mov es, ax
     xor di, di
     xor si, si
@@ -200,7 +206,8 @@ m13_unpack_run:
     mov [cs:m13_remaining_lo], ax
     mov ax, M13_OUTPUT_HI
     mov [cs:m13_remaining_hi], ax
-    mov word [cs:m13_dest_segment], M13_IMAGE_SEG
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG
+    mov [cs:m13_dest_segment], ax
     ; The flags begin at zero in the loaded bridge image.
 
 .token:
@@ -274,7 +281,7 @@ m13_unpack_run:
 .complete:
     ; Initialize all non-file-backed storage, including the exact linked
     ; stack. The host layout validator bounds this one-segment clear.
-    mov ax, M13_ZERO_SEG
+    M13_MOV_IMAGE ax, M13_ZERO_SEG
     mov es, ax
     mov di, M13_ZERO_OFF
     mov cx, M13_ZERO_BYTES
@@ -285,7 +292,7 @@ m13_unpack_run:
 %if M13_BRIDGE_IN_ALLOCATION
     mov ax, M13_SCRATCH_SEG
 %else
-    mov ax, M13_FILE_SEG
+    M13_MOV_FILE ax
 %endif
     mov ds, ax
     mov si, M13_RELOC_SOURCE_OFFSET
@@ -294,10 +301,11 @@ m13_unpack_run:
     jcxz .relocated
     mov di, [ds:si]
     mov bx, [ds:si+2]
-    mov ax, M13_IMAGE_SEG
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG
     add ax, bx
     mov es, ax
-    add word [es:di], M13_IMAGE_SEG
+    M13_MOV_IMAGE bx, M13_IMAGE_SEG
+    add word [es:di], bx
     add si, 4
     dec cx
     jmp .relocate
@@ -306,10 +314,10 @@ m13_unpack_run:
     ; The original image is now fully relocated. Copy INIT first, while its
     ; low source is intact, then seed the final assembly-text slot over that
     ; dead source. The original bootstrap stack remains separate until M10.
-    mov ax, M13_INIT_SOURCE_SEG
+    M13_MOV_IMAGE ax, M13_INIT_SOURCE_SEG
     mov ds, ax
     xor si, si
-    mov ax, M13_INIT_DEST_SEG
+    M13_MOV_IMAGE ax, M13_INIT_DEST_SEG
     mov es, ax
     xor di, di
     mov cx, M13_INIT_BYTES
@@ -317,26 +325,29 @@ m13_unpack_run:
     xor ax, ax
     mov cx, M13_INIT_ZERO_BYTES
     rep stosb
-    mov ax, M13_HMA_SOURCE_SEG
+    M13_MOV_IMAGE ax, M13_HMA_SOURCE_SEG
     mov ds, ax
     xor si, si
-    mov ax, M13_HMA_DEST_SEG
+    M13_MOV_IMAGE ax, M13_HMA_DEST_SEG
     mov es, ax
     xor di, di
     mov cx, M13_HMA_BYTES
     rep movsb
 %endif
-    mov ax, M13_IMAGE_SEG
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG
     mov es, ax
-    mov ax, M13_IMAGE_SEG + M13_ORIG_SS
+%ifdef M16_BOOT_RECORD_OFFSET
+    call m16_fill_layout
+%endif
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG + M13_ORIG_SS
     mov ss, ax
     mov sp, M13_ORIG_SP
-    mov ax, M13_IMAGE_SEG
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG
     mov ds, ax
     mov es, ax
     mov dx, [cs:m13_saved_dx]
 %if M13_IN_PLACE || M13_BRIDGE_IN_ALLOCATION
-    mov ax, M13_IMAGE_SEG + M13_ORIG_CS
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG + M13_ORIG_CS
     push ax
     mov ax, M13_ORIG_IP
     push ax
@@ -344,7 +355,7 @@ m13_unpack_run:
 %else
     ; Cross a resident trampoline to flush the CPU fetch stream after the
     ; expanded image has replaced the carrier bytes.
-    mov ax, M13_FILE_SEG
+    M13_MOV_FILE ax
     push ax
     mov ax, m13_flush_code
     push ax
@@ -361,7 +372,7 @@ m13_unpack_run:
 %if !M13_COMPACT_BRIDGE
 m13_flush_code:
     times 16 nop
-    mov ax, M13_IMAGE_SEG + M13_ORIG_CS
+    M13_MOV_IMAGE ax, M13_IMAGE_SEG + M13_ORIG_CS
     push ax
     mov ax, M13_ORIG_IP
     push ax
@@ -445,6 +456,9 @@ m13_emit:
     ret
 
 m13_saved_dx:       dw 0
+%ifdef M16_BOOT_RECORD_OFFSET
+m16_saved_file_segment: dw 0
+%endif
 m13_source:         dw 0
 m13_remaining_lo:   dw 0
 m13_remaining_hi:   dw 0
@@ -452,4 +466,7 @@ m13_dest_segment:   dw 0
 m13_match_offset:   dw 0
 m13_flags:          db 0
 m13_flag_bits:      db 0
+%ifdef M16_BOOT_RECORD_OFFSET
+    M16_RUNTIME_CODE
+%endif
 m13_unpack_end:

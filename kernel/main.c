@@ -398,12 +398,31 @@ STATIC void init_kernel(void)
 
   /* Init oem hook - returns memory size in KB    */
   ram_top = init_oem();
+#if defined(PC88VA)
+  printf("Conventional Memory = %uKB\n", ram_top);
+  printf("Kernel loaded = %05lxh (PC88VA_LOADSEG=%04xh)\n",
+         (ULONG)pc88va_image_segment() << 4, pc88va_image_segment());
+  printf("Kernel file staging = %05lxh\n", (ULONG)m16_boot_layout.file_segment << 4);
+  printf("Carrier = %05lxh\n", (ULONG)m16_boot_layout.carrier_segment << 4);
+  printf("Resident target = %05lxh\n", (ULONG)m13_layout.resident_text_segment << 4);
+  printf("INIT = %05lxh, %u bytes\n",
+         (ULONG)m13_layout.init_segment << 4, m13_layout.init_bytes);
+  printf("INIT stack = %05lxh-%05lxh\n",
+         (ULONG)m13_layout.init_stack_segment << 4,
+         ((ULONG)m13_layout.init_stack_segment << 4) + m13_layout.init_stack_bytes);
+  printf("Scratch = %05lxh, ring = %05lxh\n",
+         (ULONG)m16_boot_layout.scratch_segment << 4,
+         (ULONG)m16_boot_layout.ring_segment << 4);
+  printf("Bridge stack top = %05lxh\n",
+         ((ULONG)m16_boot_layout.bridge_stack_segment << 4) +
+         m16_boot_layout.bridge_stack_pointer);
+#endif
 
   /* move kernel to high conventional RAM, just below the init code */
 #if defined(PC88VA)
   /* Keep the final assembly text after the low resident prefix. INIT code
      and its stack are separately placed; the old text bounds NEAR Dyn. */
-  if (ram_top < 256 || ram_top > 640 || (ram_top & 127) != 0 ||
+  if (ram_top < 256 || ram_top > 640 ||
       m13_layout.version != 1 ||
       ((ULONG)m13_layout.init_segment << 4) + m13_layout.init_bytes >
         (ULONG)ram_top * 1024UL ||

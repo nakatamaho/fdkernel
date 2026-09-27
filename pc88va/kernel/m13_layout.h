@@ -22,5 +22,18 @@ struct pc88va_layout {
 #define PC88VA_LAYOUT_RUNTIME_MEMORY_TOP 0
 
 extern struct pc88va_layout m13_layout;
+/* The builder fills fixed carrier addresses; the loader supplies the actual
+   file segment selected before the carrier overwrites the loader context. */
+struct pc88va_boot_layout {
+  UBYTE signature[8];
+  UWORD file_segment;
+  UWORD carrier_segment;
+  UWORD scratch_segment;
+  UWORD ring_segment;
+  UWORD bridge_stack_segment;
+  UWORD bridge_stack_pointer;
+};
+extern struct pc88va_boot_layout m16_boot_layout;
+typedef char pc88va_boot_layout_size_check[sizeof(struct pc88va_boot_layout) == 20 ? 1 : -1];
 typedef char pc88va_layout_size_check[sizeof(struct pc88va_layout) == 24 ? 1 : -1];
 #endif

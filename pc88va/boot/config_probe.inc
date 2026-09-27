@@ -50,6 +50,14 @@ pc88va_stage2_config_bootstrap:
     je .default
     cmp ax, PC88VA_CFG_FOUND
     jne .invalid
+%ifdef PC88VA_RUNTIME_LOADSEG
+    ; The setting is the expanded image base. Staging remains profile-owned;
+    ; the carrier checks the complete translated layout against measured RAM.
+    cmp word [pc88va_cfg_value], 1000h
+    jb .invalid
+    cmp word [pc88va_cfg_value], 0a000h
+    jae .invalid
+%else
     ; Use the actual KERNEL.SYS directory size rather than the profile's
     ; conservative file-window capacity when checking an alternate segment.
     ; This preserves room for a selector inside the same owned window.
@@ -67,6 +75,7 @@ pc88va_stage2_config_bootstrap:
     mov ax, [pc88va_cfg_value]
     mov [pc88va_stage2_file+FL_SEGMENT], ax
     mov [pc88va_stage2_mz+MZ_FILE_SEGMENT], ax
+%endif
 
 .default:
     mov word [pc88va_stage2_root_name_pointer], pc88va_stage2_kernel_name

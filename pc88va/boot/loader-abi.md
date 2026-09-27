@@ -268,3 +268,20 @@ zero-relocation carrier, strips its header, copies its body, initializes the
 required additional allocation and validates entry and stack before one-way
 far transfer with interrupts disabled. Stage-2/file/kernel/stack lifetimes and
 disjoint half-open intervals follow the parent M08 ADR and private overlay.
+
+## M16 runtime kernel-layout extension
+
+When the matched loader is assembled with `PC88VA_RUNTIME_LOADSEG`,
+`PC88VA_LOADSEG=hhhh` in CONFIG.SYS selects the expanded kernel layout base,
+not the temporary file buffer. The default is the carrier's compiled image base.
+The file and transformed MZ staging allocations remain profile-owned. The
+handoff carries the requested base in BX (zero means default) and the actual
+file staging segment in CX; other handoff registers retain the version-1
+contract. Builds without this extension retain the historical interface.
+
+The matched split carrier measures RAM, checks the full translated layout and
+transient workspace, relocates its workspace when necessary, and applies the
+same base delta to image, resident text, INIT, stacks, descriptor segments, and
+MZ relocations. It preserves the effective addresses in the `M16BOOT1` startup
+record. It rejects an invalid layout before expanding into the requested target.
+The previous M16 interpretation of LOADSEG as a file-buffer selector is superseded.

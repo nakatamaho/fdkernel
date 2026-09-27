@@ -70,93 +70,17 @@ pc88va_int21_service_far_:
         pop bp
         retf
 
-; Read the PC-88VA BIOS main-memory selection from backup RAM.  The BIOS
-; record is exposed at B000:1FC4 when system-memory bank 9 is selected in the
-; high byte of the 0152h word port.  Keep the port word and segment mapping
-; transactionally paired: an interrupt must not observe the temporary bank.
+; Measure conventional RAM without trusting a retained BIOS selection.
+; The active low-staging profile fits below 256 KiB. Check its upper boundary,
+; then sample one byte at the start of each KiB from 256 KiB through 639 KiB.
+; Restore every sample after complementary 00h/FFh writes, including failures.
+; AX returns the contiguous writable capacity in KiB, or zero if the minimum
+; capacity is unavailable. Interrupts are masked during the temporary writes;
+; all other registers, flags, and memory-bank settings are preserved.
 global PC88VA_MEMORY_KB
+%include "kernel/m16_memory_probe.inc"
 PC88VA_MEMORY_KB:
-        pushf
-        cli
-        push bx
-        push cx
-        push dx
-        push si
-        push di
-        push es
-
-        mov dx, 0152h
-        in ax, dx
-        push ax
-        and ah, 0f0h
-        or ah, 09h
-        out dx, ax
-
-        mov ax, 0b000h
-        mov es, ax
-        mov al, [es:1fc4h]
-        and al, 07h
-        ; VAEG and the supported VA BIOS record encode 256, 384, 512,
-        ; and 640 KiB as codes 1..4.  Reject an erased/open-bus record
-        ; instead of fabricating a larger memory ceiling.
-        cmp al, 4
-        ja .memory_invalid
-        or al, al
-        jz .memory_invalid
-        inc al
-        mov bl, 128
-        mul bl
-        mov si, ax
-
-        ; A saved selection can exceed installed RAM after a configuration
-        ; change. Bound it by writable conventional RAM before creating the
-        ; DOS arena. Probe the last word of each supported 128 KiB step,
-        ; starting at the minimum capacity, and restore every sampled word.
-        ; Two complementary patterns reject open bus and read-only storage.
-        ; The low-staging carrier leaves these boundary words outside its
-        ; live image, INIT, and stack intervals. Interrupts remain disabled.
-        mov cx, 256
-        xor di, di
-.memory_probe:
-        mov ax, cx
-        mov dx, 64
-        mul dx
-        dec ax
-        mov es, ax
-        mov bx, [es:000eh]
-        mov word [es:000eh], 055aah
-        cmp word [es:000eh], 055aah
-        jne .memory_probe_failed
-        mov word [es:000eh], 0aa55h
-        cmp word [es:000eh], 0aa55h
-        jne .memory_probe_failed
-        mov [es:000eh], bx
-        mov di, cx
-        add cx, 128
-        cmp cx, si
-        jbe .memory_probe
-        jmp short .memory_probe_done
-.memory_probe_failed:
-        mov [es:000eh], bx
-.memory_probe_done:
-        mov si, di
-        jmp short .memory_restore
-
-.memory_invalid:
-        xor si, si
-
-.memory_restore:
-        mov dx, 0152h
-        pop ax
-        out dx, ax
-        mov ax, si
-        pop es
-        pop di
-        pop si
-        pop dx
-        pop cx
-        pop bx
-        popf
+        PC88VA_MEASURE_RAM
         retf
 
 ; Return the segment where the MZ loader placed the initial kernel image.
