@@ -803,7 +803,7 @@ STATIC VOID guard_mcb(UWORD old_psp, UWORD new_psp)
 {
   UWORD mcbseg = LoL->first_mcb;
   UWORD umblink = LoL->uppermem_link != 0;
-  iregs r;
+  static iregs r;
 
   r.a.x = 0x5803;
   r.b.x = 1;
@@ -988,7 +988,7 @@ STATIC VOID InitPrinters(VOID)
 #if defined(PC88VA)
   return;
 #else
-  iregs r;
+  static iregs r;
   int num_printers, i;
 
   init_call_intr(0x11, &r);     /* get equipment list */
@@ -1009,7 +1009,7 @@ STATIC VOID InitSerialPorts(VOID)
 #if defined(PC88VA)
   return;
 #else
-  iregs r;
+  static iregs r;
   int serial_ports, i;
 
   init_call_intr(0x11, &r);     /* get equipment list */
@@ -1038,7 +1038,7 @@ STATIC VOID InitSerialPorts(VOID)
 
 STATIC int EmulatedDriveStatus(int drive,char statusOnly)
 {
-  iregs r;
+  static iregs r;
   char buffer[0x13];
   buffer[0] = 0x13;
 
@@ -1060,7 +1060,7 @@ STATIC void CheckContinueBootFromHarddisk(void)
   return;
 #else
   char *bootedFrom = "Floppy/CD";
-  iregs r;
+  static iregs r;
   int key;
 
   if (InitKernelConfig.BootHarddiskSeconds == 0)
