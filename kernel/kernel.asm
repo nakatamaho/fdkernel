@@ -1000,10 +1000,8 @@ __HMATextEnd:                   ; and c version
 ; stack here to ease debugging. -- ror4
 
 %ifdef PC88VA_M13
-; Introduce the discardable code class before STACK so the bootstrap stack
-; remains outside its file-backed source range in the linked MZ image.
-segment M13_INIT_TEXT class=M13INIT public align=16
-group M13_INIT_GROUP M13_INIT_TEXT
+; segs.inc declares the discardable INIT group before STACK so this
+; bootstrap stack remains outside its file-backed source range.
 segment _STACK class(STACK) nobits stack align=16
 %else
 segment _STACK class(STACK) nobits stack
