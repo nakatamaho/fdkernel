@@ -64,17 +64,21 @@ m16_prepare:
     mov ax, bx
     sub ax, M13_IMAGE_SEG
     mov [cs:m16_image_delta], ax
+    ; Final resident code/data start at BX and grow upward. The initial
+    ; expanded image (including its bootstrap stack) must end before the
+    ; compressed carrier. INIT is temporary and follows the RAM-top-relative
+    ; workspace plan, independently of the resident base.
     mov ax, bx
-    add ax, M16_IMAGE_END_PARAS
+    add ax, M16_LOW_IMAGE_END_PARAS
     jc .invalid
-    cmp ax, dx
-    ja .invalid
-    ; The default base retains the verified phased 256 KiB lifetimes.
-    ; Alternate bases must be wholly below the transient carrier workspace.
-    cmp bx, M13_IMAGE_SEG
-    je .ready
     cmp ax, [cs:m16_work_file]
     ja .invalid
+    ; The builder qualifies INIT and its stack against the 256 KiB workspace.
+    ; Translate that complete temporary plan by measured RAM minus 256 KiB.
+    mov ax, dx
+    sub ax, 4000h
+    sub ax, [cs:m16_image_delta]
+    mov [cs:m16_init_delta], ax
 .ready:
     mov dx, [cs:m13_saved_dx]
     jmp m13_unpack_start_ready
@@ -98,6 +102,9 @@ m16_fill_layout:
     add word [es:M16_LAYOUT_RECORD_OFFSET+10], bx
     add word [es:M16_LAYOUT_RECORD_OFFSET+12], bx
     add word [es:M16_LAYOUT_RECORD_OFFSET+16], bx
+    mov bx, [cs:m16_init_delta]
+    add word [es:M16_LAYOUT_RECORD_OFFSET+12], bx
+    add word [es:M16_LAYOUT_RECORD_OFFSET+16], bx
     mov ax, [cs:m16_saved_file_segment]
     mov [es:M16_BOOT_RECORD_OFFSET+8], ax
     mov ax, [cs:m16_work_file]
@@ -109,6 +116,7 @@ m16_fill_layout:
     mov [es:M16_BOOT_RECORD_OFFSET+14], ax
     ret
 m16_image_delta: dw 0
+m16_init_delta: dw 0
 m16_work_file: dw M13_FILE_SEG
 m16_work_ring: dw M13_RING_SEG
 m16_work_stack: dw M13_BRIDGE_STACK_SEG

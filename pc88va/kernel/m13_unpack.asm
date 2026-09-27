@@ -304,6 +304,15 @@ m13_unpack_run:
     M13_MOV_IMAGE ax, M13_IMAGE_SEG
     add ax, bx
     mov es, ax
+%ifdef M16_BOOT_RECORD_OFFSET
+    ; Split INIT references have one builder-qualified relative segment.
+    ; Rebase them separately when INIT is compacted below its legacy slot.
+    cmp word [es:di], M13_INIT_DEST_SEG - M13_IMAGE_SEG
+    jne .resident_fixup
+    mov bx, [cs:m16_init_delta]
+    add word [es:di], bx
+.resident_fixup:
+%endif
     M13_MOV_IMAGE bx, M13_IMAGE_SEG
     add word [es:di], bx
     add si, 4
@@ -318,6 +327,9 @@ m13_unpack_run:
     mov ds, ax
     xor si, si
     M13_MOV_IMAGE ax, M13_INIT_DEST_SEG
+%ifdef M16_BOOT_RECORD_OFFSET
+    add ax, [cs:m16_init_delta]
+%endif
     mov es, ax
     xor di, di
     mov cx, M13_INIT_BYTES

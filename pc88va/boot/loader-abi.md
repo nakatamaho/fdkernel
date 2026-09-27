@@ -282,7 +282,10 @@ handoff registers retain the version-1 contract. Builds without this extension r
 
 The matched split carrier validates the measured-RAM handoff and transient
 workspace, checks the full translated layout, and applies the
-same base delta to image, resident text, INIT, stacks, descriptor segments, and
-MZ relocations. It preserves the effective addresses in the `M16BOOT1` startup
+resident base delta to image, resident assembly and bootstrap stack. INIT
+and its stack track measured RAM top independently; their descriptor fields
+and all INIT segment relocations receive the corresponding temporary delta.
+Final kernel work grows consecutively after the resident hull, followed by the
+free DOS arena. P_0 releases temporary buffers, INIT and stack before the shell. It preserves the effective addresses in the `M16BOOT1` startup
 record. It rejects an invalid layout before expanding into the requested target.
 The previous M16 interpretation of LOADSEG as a file-buffer selector is superseded.

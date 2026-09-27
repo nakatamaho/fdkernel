@@ -584,6 +584,28 @@ VOID configDone(VOID)
 #endif
   }
 
+#if defined(PC88VA)
+  /* Keep all final FAR kernel work adjacent to the resident hull. The MCB
+     and sub-MCB paragraphs are owned metadata, not reserved address gaps.
+     Early high buffers and INIT stay temporary until the P_0 release barrier. */
+  {
+    seg resident_end = (seg)(CurrentKernelSegment + (HMAFree + 15UL) / 16UL);
+    mcb FAR *system = para2far(LoL->first_mcb);
+    mcb FAR *remaining = para2far(base_seg);
+    if (LoL->first_mcb != resident_end || base_seg <= resident_end ||
+        system->m_psp != 8 || system->m_type != MCB_NORMAL ||
+        (ULONG)resident_end + system->m_size + 1UL != base_seg ||
+        remaining->m_psp != FREE_PSP || remaining->m_type != MCB_NORMAL ||
+        (ULONG)base_seg + remaining->m_size + 1UL != pc88va_boot_mcb)
+      init_fatal("PC88VA low layout gap");
+    printf("Kernel low = %05lxh-%05lxh\n",
+           (ULONG)pc88va_image_segment() << 4, (ULONG)base_seg << 4);
+    printf("Kernel work = %05lxh-%05lxh\n",
+           (ULONG)resident_end << 4, (ULONG)base_seg << 4);
+    printf("DOS free begins = %05lxh\n", ((ULONG)base_seg + 1UL) << 4);
+  }
+#endif
+
   /* The standard handles should be reopened here, because
      we may have loaded new console or printer drivers in CONFIG.SYS */
 }
