@@ -84,6 +84,8 @@ STATIC COUNT joinMCBs(seg para)
 
 #if defined(PC88VA)
 extern UWORD pc88va_boot_mcb, pc88va_boot_top;
+/* The VA fatal handler is resident, unlike the INIT formatter. */
+extern VOID init_fatal(BYTE *message);
 
 /* Called once, on the permanent P_0 stack, after copying its configuration.
    No initialization code or early-buffer pointer may survive this barrier. */
@@ -111,16 +113,16 @@ COUNT pc88va_release_boot_memory(void)
     p = para2far(cur);
     next = (ULONG)cur + p->m_size + 1UL;
     if (p->m_type != MCB_NORMAL || next > pc88va_boot_mcb)
-      return DE_MCBDESTRY;
+      init_fatal("PC88VA boot MCB chain");
     previous = cur;
     cur = (seg)next;
   }
   p = para2far(cur);
   if (cur != pc88va_boot_mcb || p->m_type != MCB_LAST || p->m_psp != 8 ||
       (ULONG)cur + p->m_size + 1UL != pc88va_boot_top)
-    return DE_MCBDESTRY;
+    init_fatal("PC88VA boot reservation");
   if (DosMemFree(cur) != SUCCESS)
-    return DE_MCBDESTRY;
+    init_fatal("PC88VA boot free");
   pc88va_boot_mcb = 0;
   if (previous != 0 && mcbFree(para2far(previous)))
     return joinMCBs(previous);
