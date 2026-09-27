@@ -178,8 +178,10 @@ unsigned ASMPASCAL init_call_intr(int nr, iregs * rp);
 
 #if defined(PC88VA)
 #define INITPTR FAR
+#define INIT_LOCAL static
 #else
 #define INITPTR
+#define INIT_LOCAL
 #endif
 unsigned ASMPASCAL read(int fd, void INITPTR *buf, unsigned count);
 int ASMPASCAL open(const char *pathname, int flags);

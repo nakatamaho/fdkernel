@@ -78,7 +78,7 @@ int MenuColor = -1;
 
 STATIC void WriteMenuLine(struct MenuSelector *menu)
 {
-  static iregs r;
+  INIT_LOCAL iregs r;
   unsigned char attr = (unsigned char)MenuColor;
   char *pText = menu->Text;
 
@@ -692,7 +692,7 @@ STATIC seg prev_mcb(seg cur_mcb, seg start)
 
 STATIC void umb_init(void)
 {
-  UCOUNT umb_seg, umb_size;
+  INIT_LOCAL UCOUNT umb_seg, umb_size;
   seg umb_max;
   void far *xms_addr;
 
@@ -1209,7 +1209,7 @@ UWORD GetBiosKey(int timeout)
     }
   }
 #else
-  static iregs r;
+  INIT_LOCAL iregs r;
 
   ULONG startTime = GetBiosTime();
 
@@ -1395,7 +1395,7 @@ STATIC void CfgBuffersHigh(BYTE * pLine)
 */
 STATIC VOID sysScreenMode(BYTE * pLine)
 {
-  static iregs r;
+  INIT_LOCAL iregs r;
   COUNT nMode;
   COUNT nFunc = 0x11;
 
@@ -1715,7 +1715,7 @@ STATIC BOOL LoadCountryInfo(char *filenam, UWORD ctryCode, UWORD codePage)
 {
   /* COUNTRY.SYS file data structures - see RBIL tables 2619-2622 */
 
-  static struct {      /* file header */
+  INIT_LOCAL struct {      /* file header */
     char name[8];       /* "\377COUNTRY.SYS" */
     char reserved[11];
     ULONG offset;       /* offset of first entry in file */
@@ -2555,7 +2555,7 @@ STATIC VOID CfgMenuEsc(BYTE * pLine)
 
 STATIC VOID DoMenu(void)
 {
-  static iregs r;
+  INIT_LOCAL iregs r;
   int key = -1;
   if (Menus == 0)
     return;
@@ -2661,7 +2661,7 @@ RestartInput:
 
   /* export the current selected config  menu */
   {
-    static char buffer[10];
+    INIT_LOCAL char buffer[10];
     int len;
     sprintf(buffer, "CONFIG=%c", MenuSelected+'0');
     len = strlen(buffer);
@@ -2702,7 +2702,7 @@ STATIC VOID CfgMenuDefault(BYTE * pLine)
 STATIC void ClearScreen(unsigned char attr)
 {
   /* scroll down (newlines): */
-  static iregs r;
+  INIT_LOCAL iregs r;
   unsigned char rows;
 
   /* clear */
@@ -2947,7 +2947,7 @@ STATIC VOID CmdChain(BYTE * pLine)
 
 STATIC VOID InstallExec(struct instCmds *icmd)
 {
-  static BYTE filename[128];
+  INIT_LOCAL BYTE filename[128];
   BYTE *args, *d, *cmd = icmd->buffer;
   exec_blk exb;
 
@@ -2983,7 +2983,7 @@ STATIC VOID InstallExec(struct instCmds *icmd)
 
 STATIC void free(seg segment)
 {
-  static iregs r;
+  INIT_LOCAL iregs r;
 
   r.a.b.h = 0x49;				/* free memory	*/
   r.es  = segment;
@@ -2993,7 +2993,7 @@ STATIC void free(seg segment)
 /* set memory allocation strategy */
 STATIC void set_strategy(unsigned char strat)
 {
-  static iregs r;
+  INIT_LOCAL iregs r;
 
   r.a.x = 0x5801;
   r.b.b.l = strat;
