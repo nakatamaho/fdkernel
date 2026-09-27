@@ -683,7 +683,9 @@ STATIC VOID signon()
 
 STATIC void kernel()
 {
+#if !defined(PC88VA)
   CommandTail Cmd;
+#endif
 
   if (master_env[0] == '\0')   /* some shells panic on empty master env. */
     fmemcpy(master_env, "PATH=.\0\0\0\0", sizeof("PATH=.\0\0\0\0"));
@@ -698,6 +700,10 @@ STATIC void kernel()
   fmemcpy(MK_FP(DOS_PSP + 8, 0), master_env, sizeof(master_env));
 #endif
 
+#if !defined(PC88VA)
+  /* The VA parser is disabled, so F5/F8 tail rewriting is unreachable.
+     Keep its NEAR stack-buffer operations out of the VA INIT path, where
+     SS is the independent high INIT stack rather than DGROUP. */
   /* process 0       */
   /* Execute command.com from the drive we just booted from    */
   memset(Cmd.ctBuffer, 0, sizeof(Cmd.ctBuffer));
@@ -740,6 +746,7 @@ STATIC void kernel()
       Config.cfgInitTail = Cmd.ctBuffer;
     }
   }
+#endif
 #if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
   pc88va_m13_diag_config_mode(Config.cfgP_0_startmode);
 #endif
