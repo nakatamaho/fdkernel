@@ -12,7 +12,7 @@ PYTHON=python3
 # The common core keeps its DOS data in DGROUP, matching the resident DS
 # contract established by the PC-88VA startup.
 # The M13 media contract uses 1024-byte sectors.  Keep the resident M12
-# scratch buffer at its independently defined 4096-byte capacity, but size
+# scratch buffer at the one-sector capacity defined in disk_buffer.inc; size
 # the DOS transfer/buffer arena to the media sector so COMMAND.COM can be
 # loaded without allocating over the resident-code boundary.
 M13_BASE_CFLAGS=-zq -0 -mm -bt=DOS -os -s -we -e5 -zp1 -zl -d1 -DPC88VA -DMAX_SEC_SIZE=1024 -DBIG_SECTOR=1 -I=../hdr -I=../kernel -I=kernel -I=build
@@ -262,3 +262,7 @@ bin/KERNEL.SYS: build/KVA8616.exe
 
 clean:
 	-rm -rf build bin
+
+# INIT grouping and the shared resident buffer bound affect these objects.
+build/kernel.obj build/entry.obj build/io.obj build/serial.obj build/printer.obj build/asmsupt.obj build/execrh.obj build/nlssupt.obj build/procsupt.obj build/dosidle.obj build/int2f.obj build/apisupt.obj build/intr.obj build/irqstack.obj build/memdisk.obj build/cpu.obj: ../kernel/segs.inc
+build/m13_platform.obj build/resident_disk.obj: kernel/disk_buffer.inc

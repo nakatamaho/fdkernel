@@ -6,6 +6,7 @@
 ; machines; this file supplies resident entries and VA firmware callbacks.
 bits 16
 cpu 8086
+%include "kernel/disk_buffer.inc"
 %ifndef PC88VA
 %error PC88VA selector is required
 %endif
@@ -73,6 +74,8 @@ pc88va_kernel_disk_read_:
         jne .bad
         cmp ax, pc88va_m12_request_
         jne .bad
+        cmp word [cs:pc88va_m12_request_+RD_CAPACITY], PC88VA_DISK_BUFFER_BYTES
+        ja .bad
         mov si, ax
         call pc88va_disk_read_core
         jmp short .return
@@ -260,6 +263,8 @@ pc88va_kernel_disk_write_:
         jne .write_bad
         cmp ax, pc88va_m12_request_
         jne .write_bad
+        cmp word [cs:pc88va_m12_request_+RD_CAPACITY], PC88VA_DISK_BUFFER_BYTES
+        ja .write_bad
         mov si, ax
         call pc88va_disk_write_core
         jmp short .write_return
@@ -350,6 +355,6 @@ pc88va_m12_request_: times 48 db 0
 pc88va_m12_result_: times 4 db 0
 align 16, db 0
 pc88va_m12_storage_begin:
-pc88va_m12_buffer_: times 4096 db 0
+pc88va_m12_buffer_: times PC88VA_DISK_BUFFER_BYTES db 0
 pc88va_m12_buffer_end:
 pc88va_m12_storage_end:

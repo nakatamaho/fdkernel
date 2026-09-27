@@ -6,6 +6,7 @@
 ; and DOS error presentation remain in the common kernel.
 bits 16
 cpu 8086
+%include "kernel/disk_buffer.inc"
 
 %include "../hdr/stacks.inc"
 %include "boot/loader_abi.inc"
@@ -391,7 +392,7 @@ FL_READ:
         mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
         mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
-        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], PC88VA_DISK_BUFFER_BYTES
         mov ax, [.head]
         cmp ax, [cs:pc88va_m12_request_+RD_HEADS]
         jae .bad
@@ -618,7 +619,7 @@ FL_WRITE:
         mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
         mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
-        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], PC88VA_DISK_BUFFER_BYTES
         mov ax, [.head]
         cmp ax, [cs:pc88va_m12_request_+RD_HEADS]
         jae .write_bad
@@ -737,7 +738,7 @@ FL_VERIFY:
         mov word [cs:pc88va_m12_request_+RD_VERSION], 1
         mov word [cs:pc88va_m12_request_+RD_OFFSET], pc88va_m12_buffer_
         mov word [cs:pc88va_m12_request_+RD_SEGMENT], cs
-        mov word [cs:pc88va_m12_request_+RD_CAPACITY], 4096
+        mov word [cs:pc88va_m12_request_+RD_CAPACITY], PC88VA_DISK_BUFFER_BYTES
         mov ax, [.head]
         cmp ax, [cs:pc88va_m12_request_+RD_HEADS]
         jae .verify_bad
