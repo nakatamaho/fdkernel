@@ -598,7 +598,7 @@ VOID configDone(VOID)
         remaining->m_psp != FREE_PSP || remaining->m_type != MCB_NORMAL ||
         (ULONG)base_seg + remaining->m_size + 1UL != pc88va_boot_mcb)
       init_fatal("PC88VA low layout gap");
-    printf("Kernel low = %05lxh-%05lxh\n",
+    printf("\nKernel low = %05lxh-%05lxh\n",
            (ULONG)pc88va_image_segment() << 4, (ULONG)base_seg << 4);
     printf("Kernel work = %05lxh-%05lxh\n",
            (ULONG)resident_end << 4, (ULONG)base_seg << 4);
