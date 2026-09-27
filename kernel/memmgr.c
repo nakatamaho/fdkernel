@@ -97,11 +97,15 @@ COUNT pc88va_release_boot_memory(void)
   ULONG buffers = ((ULONG)FP_SEG(firstbuf) << 4) + FP_OFF(firstbuf);
   ULONG cds = ((ULONG)FP_SEG(CDSp) << 4) + FP_OFF(CDSp);
 
-  if (pc88va_boot_mcb == 0 || _SS != FP_SEG((UWORD FAR *)&first_mcb) ||
-      buffers + (ULONG)LoL_nbuffers *
-        (sizeof(struct buffer) - BUFFERSIZE + maxsecsize) > limit ||
-      cds + (ULONG)lastdrive * sizeof(struct cds) > limit)
-    return DE_MCBDESTRY;
+  if (pc88va_boot_mcb == 0)
+    init_fatal("PC88VA boot MCB missing");
+  if (_SS != FP_SEG((UWORD FAR *)&first_mcb))
+    init_fatal("PC88VA boot stack segment");
+  if (buffers + (ULONG)LoL_nbuffers *
+        (sizeof(struct buffer) - BUFFERSIZE + maxsecsize) > limit)
+    init_fatal("PC88VA boot buffers live");
+  if (cds + (ULONG)lastdrive * sizeof(struct cds) > limit)
+    init_fatal("PC88VA boot CDS live");
   while (cur < pc88va_boot_mcb)
   {
     p = para2far(cur);
