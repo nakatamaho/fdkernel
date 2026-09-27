@@ -49,6 +49,7 @@ static BYTE *RcsId =
 #endif
 #define para2far(seg) ((mcb FAR *)MK_FP((seg), 0))
 
+#if !defined(PC88VA)
 /**
   Menu selection bar struct:
   x pos, ypos, string
@@ -125,13 +126,18 @@ STATIC void SelectLine(int MenuSelected)
   WriteMenuLine(menu);
 }
 
+#endif /* !PC88VA: CONFIG.SYS parser */
+
 UWORD umb_start BSS_INIT(0), UMB_top BSS_INIT(0);
 UWORD ram_top BSS_INIT(0); /* How much ram in Kbytes               */
 size_t ebda_size BSS_INIT(0);
 
+#if !defined(PC88VA)
 static UBYTE ErrorAlreadyPrinted[128] BSS_INIT({0});
 
 static char FAR *envp = master_env;
+
+#endif /* !PC88VA: CONFIG.SYS parser */
 
 struct config Config = {
   0,
@@ -161,8 +167,9 @@ UWORD pc88va_boot_mcb BSS_INIT(0);
 UWORD pc88va_boot_top BSS_INIT(0);
 #endif
 BYTE FAR *lpTop BSS_INIT(0);
-STATIC unsigned nCfgLine BSS_INIT(0);
 COUNT UmbState BSS_INIT(0);
+#if !defined(PC88VA)
+STATIC unsigned nCfgLine BSS_INIT(0);
 STATIC BYTE szLine[256] BSS_INIT({0});
 STATIC BYTE szBuf[256] BSS_INIT({0});
 
@@ -174,8 +181,11 @@ struct CfgFile {
 COUNT nCurChain BSS_INIT(0);
 COUNT nFileDesc BSS_INIT(0);
 
+#endif /* !PC88VA: CONFIG.SYS parser */
+
 BYTE singleStep BSS_INIT(FALSE);        /* F8 processing */
 BYTE SkipAllConfig BSS_INIT(FALSE);     /* F5 processing */
+#if !defined(PC88VA)
 BYTE askThisSingleCommand BSS_INIT(FALSE);      /* ?device=  device?= */
 BYTE DontAskThisSingleCommand BSS_INIT(FALSE);  /* !files=            */
 
@@ -184,6 +194,9 @@ BYTE  MenuSelected BSS_INIT(0);
 UCOUNT MenuLine BSS_INIT(0);
 UCOUNT Menus BSS_INIT(0);
 
+#endif /* !PC88VA: CONFIG.SYS parser */
+
+#if !defined(PC88VA)
 STATIC VOID CfgMenuColor(BYTE * pLine);
 
 STATIC VOID Config_Buffers(BYTE * pLine);
@@ -230,6 +243,8 @@ STATIC COUNT tolower(COUNT c);
 #endif
 STATIC char toupper(char c);
 STATIC VOID strupr(char *s);
+#endif /* !PC88VA: CONFIG.SYS parser */
+
 STATIC VOID mcb_init(UCOUNT seg, UWORD size, BYTE type);
 STATIC VOID mumcb_init(UCOUNT seg, UWORD size);
 #if defined(PC88VA)
@@ -238,6 +253,7 @@ STATIC VOID pc88va_init_mcb(seg segment, UWORD size, BYTE type,
                             UWORD owner);
 #endif
 
+#if !defined(PC88VA)
 STATIC VOID Stacks(BYTE * pLine);
 STATIC VOID StacksHigh(BYTE * pLine);
 
@@ -252,6 +268,8 @@ STATIC char * stristr(char *s1, char *s2);
 #endif
 STATIC char strcaseequal(const char * d, const char * s);
 STATIC int LoadCountryInfoHardCoded(COUNT ctryCode);
+#endif /* !PC88VA: CONFIG.SYS parser */
+
 STATIC void umb_init(void);
 
 void HMAconfig(int finalize);
@@ -265,6 +283,7 @@ STATIC VOID FAR * AlignParagraph(VOID FAR * lpPtr);
 
 #define EOF 0x1a
 
+#if !defined(PC88VA)
 STATIC struct table * LookUp(struct table *p, BYTE * token);
 
 typedef void config_sys_func_t(BYTE * pLine);
@@ -344,6 +363,8 @@ int  findend(BYTE * s)
 }
 
 BYTE *pLineStart BSS_INIT(0);
+
+#endif /* !PC88VA: CONFIG.SYS parser */
 
 BYTE HMAState BSS_INIT(0);
 #define HMA_NONE 0              /* do nothing */
@@ -709,7 +730,7 @@ STATIC void umb_init(void)
   }
 }
 
-#ifdef MEMDISK_ARGS
+#if defined(MEMDISK_ARGS) && !defined(PC88VA)
 struct memdiskinfo {
   UWORD bytes;               /* Total size of this structure, value >= 26 */
   UBYTE version_minor;       /* Memdisk minor version */
@@ -896,18 +917,20 @@ copy_char:
 #endif
 
 
+#if defined(PC88VA)
+/* The VA loader handles PC88VA_LOADSEG. DOS-side CONFIG.SYS processing
+   remains disabled; do not retain the unreachable parser and its storage. */
+VOID DoConfig(int nPass)
+{
+  (void)nPass;
+}
+#else
 VOID DoConfig(int nPass)
 {
   BYTE *pLine;
   BOOL bEof = FALSE;
 
-#if defined(PC88VA)
-  /* The M13 synthetic session deliberately carries no CONFIG.SYS.  The
-     PC-88VA adapter has no BIOS configuration prompt or config-file policy;
-     leave the common defaults intact and continue to the resident shell. */
-  (void)nPass;
-  return;
-#endif
+
 
 #ifdef MEMDISK_ARGS
   /* check if MEMDISK used for LoL->BootDrive, if so check for special appended arguments */
@@ -1088,12 +1111,17 @@ VOID DoConfig(int nPass)
   }
 }
 
+#endif
+
+#if !defined(PC88VA)
 STATIC struct table * LookUp(struct table *p, BYTE * token)
 {
   while (p->entry[0] != '\0' && !strcaseequal(p->entry, token))
     ++p;
   return p;
 }
+
+#endif /* !PC88VA: CONFIG.SYS parser */
 
 /*
     get BIOS key with timeout:
@@ -1152,6 +1180,7 @@ UWORD GetBiosKey(int timeout)
 #endif
 }
 
+#if !defined(PC88VA)
 STATIC BOOL SkipLine(char *pLine)
 {
   short key;
@@ -1984,6 +2013,8 @@ STATIC VOID CfgFailure(BYTE * pLine)
   printf("^\n");
 }
 
+#endif /* !PC88VA: CONFIG.SYS parser */
+
 struct submcb
 {
   char type;
@@ -2132,6 +2163,7 @@ STATIC VOID pc88va_init_mcb(seg segment, UWORD size, BYTE type, UWORD owner)
 #endif
 #endif
 
+#if !defined(PC88VA)
 STATIC int iswh(unsigned char c)
 {
   return (c == '\r' || c == '\n' || c == '\t' || c == ' ');
@@ -2219,6 +2251,8 @@ STATIC VOID strupr(char *s)
 
 /* The following code is 8086 dependant                         */
 
+#endif /* !PC88VA: CONFIG.SYS parser */
+
 #if 1                           /* ifdef KERNEL */
 STATIC VOID mcb_init_copy(UCOUNT seg, UWORD size, mcb *near_mcb)
 {
@@ -2252,6 +2286,7 @@ char *strcat(register char * d, register const char * s)
 }
 
 /* compare two ASCII strings ignoring case */
+#if !defined(PC88VA)
 STATIC char strcaseequal(const char * d, const char * s)
 {
   char ch;
@@ -2260,6 +2295,8 @@ STATIC char strcaseequal(const char * d, const char * s)
       return 1;
   return 0;
 }
+
+#endif /* !PC88VA: CONFIG.SYS parser */
 
 /*
     moved from BLOCKIO.C here.
@@ -2375,6 +2412,7 @@ STATIC void config_init_buffers(int wantedbuffers)
   }
 }
 
+#if !defined(PC88VA)
 /*
     Undocumented feature:  ANYDOS
         will report to MSDOS programs just the version number
@@ -2968,3 +3006,10 @@ STATIC VOID CmdSet(BYTE *pLine)
   else
     printf("Invalid SET command: \"%s\"\n", szBuf);
 }
+
+#else
+VOID DoInstall(void)
+{
+  /* No INSTALL commands can be queued while DOS-side parsing is disabled. */
+}
+#endif /* !PC88VA: CONFIG.SYS parser */

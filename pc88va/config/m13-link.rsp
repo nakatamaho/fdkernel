@@ -57,7 +57,6 @@ file build/cpu.obj
 file build/m13_segments.obj
 file build/console_m13.obj
 file build/m13_platform.obj
-file build/loader_services.obj
 file build/machine_services.obj
 file build/console_input.obj
 file build/resident_disk.obj
