@@ -426,6 +426,7 @@ STATIC WORD getbpb(ddt * pddt)
     BYTE *raw_bpb = (BYTE *)&DiskTransferBuffer[BT_BPB];
     bpb observed;
     UBYTE signature;
+    UBYTE short_bpb;
 
     ret = pc88va_m16_probe_read(pddt->ddt_driveno, profile->mode,
                                 (UBYTE FAR *)DiskTransferBuffer);
@@ -435,6 +436,15 @@ STATIC WORD getbpb(ddt * pddt)
     signature = DiskTransferBuffer[0x1fe] == 0x55 &&
                 DiskTransferBuffer[0x1ff] == 0xaa;
     memcpy(&observed, raw_bpb, sizeof(observed));
+    short_bpb = DiskTransferBuffer[0x26] != 0x28 &&
+                DiskTransferBuffer[0x26] != 0x29;
+    if (short_bpb)
+    {
+      /* The native formatter stores a DOS-era BPB with a 16-bit hidden
+         sector field. Later bytes are IPL instructions, not extended fields. */
+      observed.bpb_hidden &= 0xffffUL;
+      observed.bpb_huge = 0;
+    }
     /* A plausible BPB must pass the normal validator, never a fallback. */
     if (profile->mode == 0x23 && observed.bpb_nbyte != 512 &&
         observed.bpb_nbyte != 1024 && !signature &&
@@ -453,9 +463,9 @@ STATIC WORD getbpb(ddt * pddt)
         profile->total != profile->cylinders * profile->heads *
                           profile->sectors_per_track)
       continue;
-    if (profile->standard_signature && !signature)
+    if (profile->standard_signature && !signature && !short_bpb)
       continue;
-    if (!profile->standard_signature &&
+    if (!profile->standard_signature && !short_bpb &&
         ((DiskTransferBuffer[0x1fe] == 0x55) !=
          (DiskTransferBuffer[0x1ff] == 0xaa)))
       continue;
@@ -464,6 +474,32 @@ STATIC WORD getbpb(ddt * pddt)
                                profile->heads) != 0)
       continue;
 
+    if (short_bpb && !signature)
+    {
+      unsigned fat_copy;
+      ULONG lba;
+      for (fat_copy = 0; fat_copy < 2; fat_copy++)
+      {
+        lba = observed.bpb_nreserved +
+              (ULONG)fat_copy * observed.bpb_nfsect;
+        if (lba >= profile->total ||
+            fl_read(pddt->ddt_driveno,
+                    (UWORD)(lba / profile->sectors_per_track % 2),
+                    (UWORD)(lba / (profile->sectors_per_track * 2)),
+                    (UWORD)(lba % profile->sectors_per_track + 1), 1,
+                    (UBYTE FAR *)DiskTransferBuffer) != 0 ||
+            DiskTransferBuffer[0] != profile->media ||
+            DiskTransferBuffer[1] != 0xff || DiskTransferBuffer[2] != 0xff)
+          break;
+      }
+      if (fat_copy != 2 ||
+          fl_read(pddt->ddt_driveno, 1, profile->cylinders - 1,
+                  profile->sectors_per_track, 1,
+                  (UBYTE FAR *)DiskTransferBuffer) != 0)
+        continue;
+      /* The buffer no longer holds the IPL; never parse data as an EBPB. */
+      DiskTransferBuffer[0x26] = 0;
+    }
     memcpy(pbpbarray, &observed, sizeof(observed));
     pddt->ddt_ncyl = profile->cylinders;
     pddt->ddt_descflags &= ~DF_NOACCESS;

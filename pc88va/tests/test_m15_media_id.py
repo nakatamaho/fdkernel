@@ -85,7 +85,9 @@ HARNESS += r'''
 static int fl_read(unsigned drive, unsigned head, unsigned cyl, unsigned sector,
                    unsigned count, void *buffer) {
     (void)drive; (void)head; (void)cyl; (void)sector; (void)count; (void)buffer;
-    assert(0); return 1;
+    memset(buffer,0,1024); ((UBYTE *)buffer)[0]=0xfe;
+    ((UBYTE *)buffer)[1]=0xff; ((UBYTE *)buffer)[2]=0xff;
+    return read_error;
 }
 '''
 MAIN = r'''
