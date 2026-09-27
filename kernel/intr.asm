@@ -178,6 +178,29 @@ no_exec_error:
     global RES_READ
 RES_READ:
 %ifdef PC88VA
+        ; FAR Pascal: count, buffer offset:segment, fd.
+        push bp
+        mov bp,sp
+        push ds
+        push si
+        push di
+        push es
+        mov cx,[ss:bp+6]
+        lds dx,[ss:bp+8]
+        mov bx,[ss:bp+12]
+        mov ah,3fh
+        int 21h
+        jnc .read_ok
+        mov ax,-1
+.read_ok:
+        pop es
+        pop di
+        pop si
+        pop ds
+        pop bp
+        retf 8
+%else
+%ifdef PC88VA
         ; The medium-model caller pushes fd, buf, count and performs a FAR
         ; Pascal call.  BP+6 is count, BP+8 is the near buffer offset, and
         ; BP+10 is fd; the data pointer is interpreted in caller DS.
@@ -356,6 +379,7 @@ READ:
         mov ah, 3fh
         jmp short common_int21
 
+%endif
 ;; int dup2(int oldfd, int newfd); 
     global DUP2
 DUP2:
@@ -399,6 +423,25 @@ dup2_pc88va_ok:
 ;
     global LSEEK
 LSEEK:
+%ifdef PC88VA
+        push bp
+        mov bp,sp
+        push bx
+        push cx
+        mov dx,[ss:bp+6]
+        mov cx,[ss:bp+8]
+        mov bx,[ss:bp+10]
+        mov ax,4200h
+        int 21h
+        jnc .seek_ok
+        mov ax,-1
+        mov dx,ax
+.seek_ok:
+        pop cx
+        pop bx
+        pop bp
+        retf 6
+%else
         pop ax         ; ret address
         popargs bx,{cx,dx} ; fd, position high:low
         push ax        ; ret address
@@ -410,6 +453,7 @@ LSEEK:
 seek_ret:
         ret
         
+%endif
 ;; VOID init_PSPSet(seg psp_seg)
     global INIT_PSPSET
 INIT_PSPSET:
@@ -435,6 +479,29 @@ INIT_PSPSET:
 ;; COUNT init_DosExec(COUNT mode, exec_blk * ep, BYTE * lp)
     global INIT_DOSEXEC
 INIT_DOSEXEC:
+%ifdef PC88VA
+        ; FAR Pascal: near filename, FAR execution block, mode.
+        push bp
+        mov bp,sp
+        push ds
+        push si
+        push di
+        push cx
+        mov dx,[ss:bp+6]
+        les bx,[ss:bp+8]
+        mov ax,[ss:bp+12]
+        mov ah,4bh
+        int 21h
+        jc .exec_error
+        xor ax,ax
+.exec_error:
+        pop cx
+        pop di
+        pop si
+        pop ds
+        pop bp
+        retf 8
+%else
         pop es                  ; ret address
         popargs ax,bx,dx        ; mode, exec block, filename
         push es                 ; ret address
@@ -447,6 +514,7 @@ INIT_DOSEXEC:
 exec_no_error:
         ret
 
+%endif
 ;; int init_setdrive(int drive)
    global INIT_SETDRIVE
 INIT_SETDRIVE:

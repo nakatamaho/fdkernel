@@ -176,14 +176,19 @@ extern void ASM DosIdle_hlt(VOID);
  */
 unsigned ASMPASCAL init_call_intr(int nr, iregs * rp);
 
-unsigned ASMPASCAL read(int fd, void *buf, unsigned count);
+#if defined(PC88VA)
+#define INITPTR FAR
+#else
+#define INITPTR
+#endif
+unsigned ASMPASCAL read(int fd, void INITPTR *buf, unsigned count);
 int ASMPASCAL open(const char *pathname, int flags);
 int ASMPASCAL close(int fd);
 int ASMPASCAL dup2(int oldfd, int newfd);
 ULONG ASMPASCAL lseek(int fd, long position);
 seg ASMPASCAL allocmem(UWORD size);
 void ASMPASCAL init_PSPSet(seg psp_seg);
-int ASMPASCAL init_DosExec(int mode, exec_blk * ep, char * lp);
+int ASMPASCAL init_DosExec(int mode, exec_blk INITPTR * ep, char * lp);
 int ASMPASCAL init_setdrive(int drive);
 int ASMPASCAL init_switchar(int chr);
 void ASMPASCAL keycheck(void);
@@ -235,7 +240,7 @@ VOID ASMCFUNC FAR init_call_p_0(struct config FAR *Config); /* P_0, actually */
 /* main.c */
 VOID ASMCFUNC FreeDOSmain(void);
 BOOL init_device(struct dhdr FAR * dhp, char * cmdLine,
-                      COUNT mode, char FAR **top);
+                      COUNT mode, char FAR * INITPTR *top);
 VOID init_fatal(BYTE * err_msg);
 
 /* prf.c */

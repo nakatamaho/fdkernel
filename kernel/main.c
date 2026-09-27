@@ -827,10 +827,10 @@ STATIC VOID guard_mcb(UWORD old_psp, UWORD new_psp)
 #endif
 
 BOOL init_device(struct dhdr FAR * dhp, char *cmdLine, COUNT mode,
-                 char FAR **r_top)
+                 char FAR * INITPTR *r_top)
 {
   request rq;
-  char name[8];
+  static char name[8];
 
 #if defined(PC88VA)
   /* Private bounded probes bracket the first real InitIO request. */

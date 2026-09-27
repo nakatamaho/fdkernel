@@ -49,7 +49,13 @@ static BYTE *RcsId =
 #endif
 #define para2far(seg) ((mcb FAR *)MK_FP((seg), 0))
 
-#if !defined(PC88VA)
+#if defined(PC88VA)
+/* INIT has SS != DS; numeric outputs may refer to stack locals. */
+#define CFGPTR FAR
+#else
+#define CFGPTR
+#endif
+
 /**
   Menu selection bar struct:
   x pos, ypos, string
@@ -72,7 +78,7 @@ int MenuColor = -1;
 
 STATIC void WriteMenuLine(struct MenuSelector *menu)
 {
-  iregs r;
+  static iregs r;
   unsigned char attr = (unsigned char)MenuColor;
   char *pText = menu->Text;
 
@@ -126,18 +132,13 @@ STATIC void SelectLine(int MenuSelected)
   WriteMenuLine(menu);
 }
 
-#endif /* !PC88VA: CONFIG.SYS parser */
-
 UWORD umb_start BSS_INIT(0), UMB_top BSS_INIT(0);
 UWORD ram_top BSS_INIT(0); /* How much ram in Kbytes               */
 size_t ebda_size BSS_INIT(0);
 
-#if !defined(PC88VA)
 static UBYTE ErrorAlreadyPrinted[128] BSS_INIT({0});
 
 static char FAR *envp = master_env;
-
-#endif /* !PC88VA: CONFIG.SYS parser */
 
 struct config Config = {
   0,
@@ -167,9 +168,8 @@ UWORD pc88va_boot_mcb BSS_INIT(0);
 UWORD pc88va_boot_top BSS_INIT(0);
 #endif
 BYTE FAR *lpTop BSS_INIT(0);
-COUNT UmbState BSS_INIT(0);
-#if !defined(PC88VA)
 STATIC unsigned nCfgLine BSS_INIT(0);
+COUNT UmbState BSS_INIT(0);
 STATIC BYTE szLine[256] BSS_INIT({0});
 STATIC BYTE szBuf[256] BSS_INIT({0});
 
@@ -181,11 +181,8 @@ struct CfgFile {
 COUNT nCurChain BSS_INIT(0);
 COUNT nFileDesc BSS_INIT(0);
 
-#endif /* !PC88VA: CONFIG.SYS parser */
-
 BYTE singleStep BSS_INIT(FALSE);        /* F8 processing */
 BYTE SkipAllConfig BSS_INIT(FALSE);     /* F5 processing */
-#if !defined(PC88VA)
 BYTE askThisSingleCommand BSS_INIT(FALSE);      /* ?device=  device?= */
 BYTE DontAskThisSingleCommand BSS_INIT(FALSE);  /* !files=            */
 
@@ -194,9 +191,6 @@ BYTE  MenuSelected BSS_INIT(0);
 UCOUNT MenuLine BSS_INIT(0);
 UCOUNT Menus BSS_INIT(0);
 
-#endif /* !PC88VA: CONFIG.SYS parser */
-
-#if !defined(PC88VA)
 STATIC VOID CfgMenuColor(BYTE * pLine);
 
 STATIC VOID Config_Buffers(BYTE * pLine);
@@ -243,8 +237,6 @@ STATIC COUNT tolower(COUNT c);
 #endif
 STATIC char toupper(char c);
 STATIC VOID strupr(char *s);
-#endif /* !PC88VA: CONFIG.SYS parser */
-
 STATIC VOID mcb_init(UCOUNT seg, UWORD size, BYTE type);
 STATIC VOID mumcb_init(UCOUNT seg, UWORD size);
 #if defined(PC88VA)
@@ -253,14 +245,13 @@ STATIC VOID pc88va_init_mcb(seg segment, UWORD size, BYTE type,
                             UWORD owner);
 #endif
 
-#if !defined(PC88VA)
 STATIC VOID Stacks(BYTE * pLine);
 STATIC VOID StacksHigh(BYTE * pLine);
 
 STATIC VOID SetAnyDos(BYTE * pLine);
 STATIC VOID SetIdleHalt(BYTE * pLine);
 STATIC VOID Numlock(BYTE * pLine);
-STATIC BYTE * GetNumArg(BYTE * pLine, COUNT * pnArg);
+STATIC BYTE * GetNumArg(BYTE * pLine, COUNT CFGPTR * pnArg);
 BYTE *GetStringArg(BYTE * pLine, BYTE * pszString);
 STATIC int SkipLine(char *pLine);
 #if 0
@@ -268,8 +259,6 @@ STATIC char * stristr(char *s1, char *s2);
 #endif
 STATIC char strcaseequal(const char * d, const char * s);
 STATIC int LoadCountryInfoHardCoded(COUNT ctryCode);
-#endif /* !PC88VA: CONFIG.SYS parser */
-
 STATIC void umb_init(void);
 
 void HMAconfig(int finalize);
@@ -283,7 +272,6 @@ STATIC VOID FAR * AlignParagraph(VOID FAR * lpPtr);
 
 #define EOF 0x1a
 
-#if !defined(PC88VA)
 STATIC struct table * LookUp(struct table *p, BYTE * token);
 
 typedef void config_sys_func_t(BYTE * pLine);
@@ -301,43 +289,103 @@ STATIC struct table commands[] = {
 
   /* rem is never executed by locking out pass                    */
   {"REM", 0, CfgIgnore},
+#if defined(PC88VA)
+  /* The loader has already validated and applied this selector. */
+  {"PC88VA_LOADSEG", 0, CfgIgnore},
+#endif
   {";", 0,   CfgIgnore},
 
+#if defined(PC88VA)
+  {"MENUCOLOR",0, CfgFailure},
+#else
   {"MENUCOLOR",0,CfgMenuColor},
+#endif
 
+#if defined(PC88VA)
+  {"MENUDEFAULT", 0, CfgFailure},
+#else
   {"MENUDEFAULT", 0, CfgMenuDefault},
+#endif
+#if defined(PC88VA)
+  {"MENU", 0, CfgFailure},         /* lines to print in pass 0 */
+#else
   {"MENU", 0, CfgMenu},         /* lines to print in pass 0 */
+#endif
   {"ECHO", 2, CfgMenu},         /* lines to print in pass 2 - install(high) */
   {"EECHO", 2, CfgMenuEsc},     /* modified ECHO (ea) */
 
   {"BREAK", 1, CfgBreak},
   {"BUFFERS", 1, Config_Buffers},
+#if defined(PC88VA)
+  {"BUFFERSHIGH", 1, CfgFailure}, /* as BUFFERS - we use HMA anyway */
+#else
   {"BUFFERSHIGH", 1, CfgBuffersHigh}, /* as BUFFERS - we use HMA anyway */
+#endif
   {"COMMAND", 1, InitPgm},
   {"COUNTRY", 1, Country},
   {"DOS", 1, Dosmem},
+#if defined(PC88VA)
+  {"DOSDATA", 1, CfgFailure},
+#else
   {"DOSDATA", 1, DosData},
+#endif
   {"FCBS", 1, Fcbs},
+#if defined(PC88VA)
+  {"KEYBUF", 1, CfgFailure},	/* ea */
+#else
   {"KEYBUF", 1, CfgKeyBuf},	/* ea */
+#endif
   {"FILES", 1, Files},
+#if defined(PC88VA)
+  {"FILESHIGH", 1, CfgFailure},
+#else
   {"FILESHIGH", 1, FilesHigh},
+#endif
   {"LASTDRIVE", 1, CfgLastdrive},
+#if defined(PC88VA)
+  {"LASTDRIVEHIGH", 1, CfgFailure},
+#else
   {"LASTDRIVEHIGH", 1, CfgLastdriveHigh},
+#endif
+#if defined(PC88VA)
+  {"NUMLOCK", 1, CfgFailure},
+#else
   {"NUMLOCK", 1, Numlock},
+#endif
   {"SHELL", 1, InitPgm},
+#if defined(PC88VA)
+  {"SHELLHIGH", 1, CfgFailure},
+#else
   {"SHELLHIGH", 1, InitPgmHigh},
+#endif
   {"STACKS", 1, Stacks},
+#if defined(PC88VA)
+  {"STACKSHIGH", 1, CfgFailure},
+#else
   {"STACKSHIGH", 1, StacksHigh},
+#endif
   {"SWITCHAR", 1, CfgSwitchar},
+#if defined(PC88VA)
+  {"SCREEN", 1, CfgFailure},   /* JPP */
+#else
   {"SCREEN", 1, sysScreenMode},   /* JPP */
+#endif
   {"VERSION", 1, sysVersion},     /* JPP */
   {"ANYDOS", 1, SetAnyDos},       /* tom */
   {"IDLEHALT", 1, SetIdleHalt},   /* ea  */
 
   {"DEVICE", 2, Device},
+#if defined(PC88VA)
+  {"DEVICEHIGH", 2, CfgFailure},
+#else
   {"DEVICEHIGH", 2, DeviceHigh},
+#endif
   {"INSTALL", 2, CmdInstall},
+#if defined(PC88VA)
+  {"INSTALLHIGH", 2, CfgFailure},
+#else
   {"INSTALLHIGH", 2, CmdInstallHigh},
+#endif
   {"CHAIN", 2, CmdChain},
   {"SET", 2, CmdSet},
 
@@ -363,8 +411,6 @@ int  findend(BYTE * s)
 }
 
 BYTE *pLineStart BSS_INIT(0);
-
-#endif /* !PC88VA: CONFIG.SYS parser */
 
 BYTE HMAState BSS_INIT(0);
 #define HMA_NONE 0              /* do nothing */
@@ -730,7 +776,7 @@ STATIC void umb_init(void)
   }
 }
 
-#if defined(MEMDISK_ARGS) && !defined(PC88VA)
+#ifdef MEMDISK_ARGS
 struct memdiskinfo {
   UWORD bytes;               /* Total size of this structure, value >= 26 */
   UBYTE version_minor;       /* Memdisk minor version */
@@ -917,14 +963,6 @@ copy_char:
 #endif
 
 
-#if defined(PC88VA)
-/* The VA loader handles PC88VA_LOADSEG. DOS-side CONFIG.SYS processing
-   remains disabled; do not retain the unreachable parser and its storage. */
-VOID DoConfig(int nPass)
-{
-  (void)nPass;
-}
-#else
 VOID DoConfig(int nPass)
 {
   BYTE *pLine;
@@ -1111,17 +1149,12 @@ VOID DoConfig(int nPass)
   }
 }
 
-#endif
-
-#if !defined(PC88VA)
 STATIC struct table * LookUp(struct table *p, BYTE * token)
 {
   while (p->entry[0] != '\0' && !strcaseequal(p->entry, token))
     ++p;
   return p;
 }
-
-#endif /* !PC88VA: CONFIG.SYS parser */
 
 /*
     get BIOS key with timeout:
@@ -1141,12 +1174,42 @@ STATIC struct table * LookUp(struct table *p, BYTE * token)
 UWORD GetBiosKey(int timeout)
 {
 #if defined(PC88VA)
-  /* CONFIG.SYS policy is deterministic for the PC-88VA session.  Keyboard
-     input is owned by the M11 adapter, not by an IBM-PC BIOS vector. */
-  (void)timeout;
-  return 0xffff;
+  static iregs keyregs;
+  ULONG start, now;
+  unsigned key;
+  keyregs.a.x = 0x2c00;
+  init_call_intr(0x21, &keyregs);
+  start = keyregs.c.b.h * 3600UL + keyregs.c.b.l * 60UL + keyregs.d.b.h;
+  for (;;)
+  {
+    keyregs.a.x = 0x0b00;
+    init_call_intr(0x21, &keyregs);
+    if (keyregs.a.b.l)
+    {
+      keyregs.a.x = 0x0700;
+      init_call_intr(0x21, &keyregs);
+      key = keyregs.a.b.l;
+      if (key == 0)
+      {
+        keyregs.a.x = 0x0700;
+        init_call_intr(0x21, &keyregs);
+        key = (unsigned)keyregs.a.b.l << 8;
+      }
+      return key;
+    }
+    if (timeout == 0)
+      return 0xffff;
+    if (timeout > 0)
+    {
+      keyregs.a.x = 0x2c00;
+      init_call_intr(0x21, &keyregs);
+      now = keyregs.c.b.h * 3600UL + keyregs.c.b.l * 60UL + keyregs.d.b.h;
+      if ((now + 86400UL - start) % 86400UL >= (unsigned)timeout)
+        return 0xffff;
+    }
+  }
 #else
-  iregs r;
+  static iregs r;
 
   ULONG startTime = GetBiosTime();
 
@@ -1180,7 +1243,6 @@ UWORD GetBiosKey(int timeout)
 #endif
 }
 
-#if !defined(PC88VA)
 STATIC BOOL SkipLine(char *pLine)
 {
   short key;
@@ -1267,7 +1329,7 @@ STATIC BOOL SkipLine(char *pLine)
 
 /* JPP - changed so will accept hex number. */
 /* ea - changed to accept hex digits in hex numbers */
-STATIC char *GetNumArg(char *p, int *num)
+STATIC char *GetNumArg(char *p, int CFGPTR *num)
 {
   static char digits[] = "0123456789ABCDEF";
   unsigned char base = 10;
@@ -1333,7 +1395,7 @@ STATIC void CfgBuffersHigh(BYTE * pLine)
 */
 STATIC VOID sysScreenMode(BYTE * pLine)
 {
-  iregs r;
+  static iregs r;
   COUNT nMode;
   COUNT nFunc = 0x11;
 
@@ -1434,6 +1496,12 @@ STATIC VOID CfgLastdriveHigh(BYTE * pLine)
 
 STATIC VOID Dosmem(BYTE * pLine)
 {
+#if defined(PC88VA)
+  GetStringArg(pLine, szBuf);
+  if (!strcaseequal(szBuf, "LOW") && !strcaseequal(szBuf, "NOUMB") &&
+      !strcaseequal(szBuf, "LOW,NOUMB"))
+    CfgFailure(pLine);
+#else
   BYTE *pTmp;
   BYTE UMBwanted = FALSE;
 
@@ -1492,6 +1560,7 @@ STATIC VOID Dosmem(BYTE * pLine)
   {
     HMAState = HMA_DONE;
   }
+#endif
 }
 
 STATIC VOID DosData(BYTE * pLine)
@@ -1646,7 +1715,7 @@ STATIC BOOL LoadCountryInfo(char *filenam, UWORD ctryCode, UWORD codePage)
 {
   /* COUNTRY.SYS file data structures - see RBIL tables 2619-2622 */
 
-  struct {      /* file header */
+  static struct {      /* file header */
     char name[8];       /* "\377COUNTRY.SYS" */
     char reserved[11];
     ULONG offset;       /* offset of first entry in file */
@@ -2013,8 +2082,6 @@ STATIC VOID CfgFailure(BYTE * pLine)
   printf("^\n");
 }
 
-#endif /* !PC88VA: CONFIG.SYS parser */
-
 struct submcb
 {
   char type;
@@ -2163,7 +2230,6 @@ STATIC VOID pc88va_init_mcb(seg segment, UWORD size, BYTE type, UWORD owner)
 #endif
 #endif
 
-#if !defined(PC88VA)
 STATIC int iswh(unsigned char c)
 {
   return (c == '\r' || c == '\n' || c == '\t' || c == ' ');
@@ -2251,8 +2317,6 @@ STATIC VOID strupr(char *s)
 
 /* The following code is 8086 dependant                         */
 
-#endif /* !PC88VA: CONFIG.SYS parser */
-
 #if 1                           /* ifdef KERNEL */
 STATIC VOID mcb_init_copy(UCOUNT seg, UWORD size, mcb *near_mcb)
 {
@@ -2286,7 +2350,6 @@ char *strcat(register char * d, register const char * s)
 }
 
 /* compare two ASCII strings ignoring case */
-#if !defined(PC88VA)
 STATIC char strcaseequal(const char * d, const char * s)
 {
   char ch;
@@ -2295,8 +2358,6 @@ STATIC char strcaseequal(const char * d, const char * s)
       return 1;
   return 0;
 }
-
-#endif /* !PC88VA: CONFIG.SYS parser */
 
 /*
     moved from BLOCKIO.C here.
@@ -2412,7 +2473,6 @@ STATIC void config_init_buffers(int wantedbuffers)
   }
 }
 
-#if !defined(PC88VA)
 /*
     Undocumented feature:  ANYDOS
         will report to MSDOS programs just the version number
@@ -2495,7 +2555,7 @@ STATIC VOID CfgMenuEsc(BYTE * pLine)
 
 STATIC VOID DoMenu(void)
 {
-  iregs r;
+  static iregs r;
   int key = -1;
   if (Menus == 0)
     return;
@@ -2601,7 +2661,7 @@ RestartInput:
 
   /* export the current selected config  menu */
   {
-    char buffer[10];
+    static char buffer[10];
     int len;
     sprintf(buffer, "CONFIG=%c", MenuSelected+'0');
     len = strlen(buffer);
@@ -2642,7 +2702,7 @@ STATIC VOID CfgMenuDefault(BYTE * pLine)
 STATIC void ClearScreen(unsigned char attr)
 {
   /* scroll down (newlines): */
-  iregs r;
+  static iregs r;
   unsigned char rows;
 
   /* clear */
@@ -2887,7 +2947,8 @@ STATIC VOID CmdChain(BYTE * pLine)
 
 STATIC VOID InstallExec(struct instCmds *icmd)
 {
-  BYTE filename[128], *args, *d, *cmd = icmd->buffer;
+  static BYTE filename[128];
+  BYTE *args, *d, *cmd = icmd->buffer;
   exec_blk exb;
 
   InstallPrintf(("installing %s\n",cmd));
@@ -2922,7 +2983,7 @@ STATIC VOID InstallExec(struct instCmds *icmd)
 
 STATIC void free(seg segment)
 {
-  iregs r;
+  static iregs r;
 
   r.a.b.h = 0x49;				/* free memory	*/
   r.es  = segment;
@@ -2932,7 +2993,7 @@ STATIC void free(seg segment)
 /* set memory allocation strategy */
 STATIC void set_strategy(unsigned char strat)
 {
-  iregs r;
+  static iregs r;
 
   r.a.x = 0x5801;
   r.b.b.l = strat;
@@ -2956,6 +3017,7 @@ VOID DoInstall(void)
      that will be executing soon
   */
 
+#if !defined(PC88VA)
   set_strategy(LAST_FIT);
   installMemory = ((unsigned)_init_end + ebda_size + 15) / 16;
 #ifdef __WATCOMC__
@@ -2965,6 +3027,10 @@ VOID DoInstall(void)
 
   InstallPrintf(("allocated memory at %x\n",installMemory));
 
+#else
+  installMemory = 0; /* INIT is already reserved by the VA boot MCB. */
+#endif
+
   for (i = 0, cmd = InstallCommands; i < numInstallCmds; i++, cmd++)
   {
     InstallPrintf(("%d:%s\n",i,cmd->buffer));
@@ -2972,7 +3038,8 @@ VOID DoInstall(void)
     InstallExec(cmd);
   }
   set_strategy(FIRST_FIT);
-  free(installMemory);
+  if (installMemory)
+    free(installMemory);
 
   InstallPrintf(("Done with installing commands\n"));
   return;
@@ -3006,10 +3073,3 @@ STATIC VOID CmdSet(BYTE *pLine)
   else
     printf("Invalid SET command: \"%s\"\n", szBuf);
 }
-
-#else
-VOID DoInstall(void)
-{
-  /* No INSTALL commands can be queued while DOS-side parsing is disabled. */
-}
-#endif /* !PC88VA: CONFIG.SYS parser */

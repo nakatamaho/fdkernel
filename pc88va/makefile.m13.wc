@@ -183,10 +183,10 @@ build/task.obj: ../kernel/task.c
 	$(CC) $(CFLAGS) -fo=$@ ../kernel/task.c
 build/main.obj: ../kernel/main.c build/pc88va_build_id.h
 	-mkdir -p build bin
-	$(CC) $(INIT_CFLAGS) -fo=$@ ../kernel/main.c
+	$(CC) $(INIT_CFLAGS) -zu -fo=$@ ../kernel/main.c
 build/config.obj: ../kernel/config.c
 	-mkdir -p build bin
-	$(CC) $(INIT_CFLAGS) -fo=$@ ../kernel/config.c
+	$(CC) $(INIT_CFLAGS) -zu -fo=$@ ../kernel/config.c
 build/initoem.obj: ../kernel/initoem.c
 	-mkdir -p build bin
 	$(CC) $(INIT_CFLAGS) -fo=$@ ../kernel/initoem.c
