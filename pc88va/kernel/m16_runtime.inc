@@ -32,9 +32,27 @@
 m16_prepare:
     mov [cs:m13_saved_dx], dx
     mov [cs:m16_saved_file_segment], cx
-    ; The MZ entry stack has only its bounded handoff tail. Switch before
-    ; calling the probe so its saved registers cannot overwrite relocations.
-    mov ax, M13_BRIDGE_STACK_SEG
+    ; AX is the loader's measured KiB; CX and CS identify the in-place
+    ; carrier. Validate this handoff without using the four-byte MZ stack.
+    cmp ax, 256
+    jb .invalid
+    cmp ax, 640
+    ja .invalid
+    mov si, cx
+    mov cl, 6
+    shl ax, cl
+    mov dx, ax
+    sub ax, 1900h
+    cmp ax, si
+    jne .invalid
+    mov cx, cs
+    cmp ax, cx
+    jne .invalid
+    mov [cs:m16_work_file], ax
+    add ax, 1100h
+    mov [cs:m16_work_ring], ax
+    sub ax, 100h
+    mov [cs:m16_work_stack], ax
     mov ss, ax
     mov sp, M13_BRIDGE_STACK_SP
     or bx, bx
@@ -46,46 +64,17 @@ m16_prepare:
     mov ax, bx
     sub ax, M13_IMAGE_SEG
     mov [cs:m16_image_delta], ax
-    call m16_measure_ram
-    cmp ax, 256
-    jb .invalid
-    mov cl, 6
-    shl ax, cl
-    mov dx, ax
     mov ax, bx
     add ax, M16_IMAGE_END_PARAS
     jc .invalid
     cmp ax, dx
     ja .invalid
+    ; The default base retains the verified phased 256 KiB lifetimes.
+    ; Alternate bases must be wholly below the transient carrier workspace.
     cmp bx, M13_IMAGE_SEG
     je .ready
-    ; Alternate images use the final 128 KiB as transient unpack workspace.
-    ; Check the complete image/INIT/stack hull below that workspace before
-    ; copying or expanding anything. The old staging buffer is then dead.
-    sub dx, 2000h
-    cmp ax, dx
+    cmp ax, [cs:m16_work_file]
     ja .invalid
-    cmp dx, (M13_FILE_SEG + 1000h)
-    jb .invalid
-    mov [cs:m16_work_file], dx
-    mov ax, dx
-    add ax, 1000h
-    mov [cs:m16_work_ring], ax
-    mov ax, dx
-    add ax, 1700h
-    mov [cs:m16_work_stack], ax
-    mov ax, cs
-    mov ds, ax
-    mov es, dx
-    xor si, si
-    xor di, di
-    mov cx, M13_RELOC_INPUT_OFFSET + M13_RELOC_COUNT * 4
-    cld
-    rep movsb
-    push dx
-    mov ax, m16_relocated_ready
-    push ax
-    retf
 .ready:
     mov dx, [cs:m13_saved_dx]
     jmp m13_unpack_start_ready
@@ -103,12 +92,6 @@ m16_prepare:
     cli
     hlt
     jmp .halt
-m16_relocated_ready:
-    mov dx, [cs:m13_saved_dx]
-    jmp m13_unpack_start_ready
-m16_measure_ram:
-    PC88VA_MEASURE_RAM
-    ret
 m16_fill_layout:
     mov bx, [cs:m16_image_delta]
     add word [es:M16_LAYOUT_RECORD_OFFSET+8], bx

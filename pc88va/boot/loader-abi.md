@@ -274,13 +274,14 @@ disjoint half-open intervals follow the parent M08 ADR and private overlay.
 When the matched loader is assembled with `PC88VA_RUNTIME_LOADSEG`,
 `PC88VA_LOADSEG=hhhh` in CONFIG.SYS selects the expanded kernel layout base,
 not the temporary file buffer. The default is the carrier's compiled image base.
-The file and transformed MZ staging allocations remain profile-owned. The
-handoff carries the requested base in BX (zero means default) and the actual
-file staging segment in CX; other handoff registers retain the version-1
-contract. Builds without this extension retain the historical interface.
+Stage 2 measures RAM before any disk read. It derives file/MZ staging at
+measured RAM end minus 19000h, preserving the qualified 256 KiB profile's
+relative transient offsets. The handoff carries measured KiB in AX, requested
+base in BX (zero means default), and actual staging segment in CX; other
+handoff registers retain the version-1 contract. Builds without this extension retain the historical interface.
 
-The matched split carrier measures RAM, checks the full translated layout and
-transient workspace, relocates its workspace when necessary, and applies the
+The matched split carrier validates the measured-RAM handoff and transient
+workspace, checks the full translated layout, and applies the
 same base delta to image, resident text, INIT, stacks, descriptor segments, and
 MZ relocations. It preserves the effective addresses in the `M16BOOT1` startup
 record. It rejects an invalid layout before expanding into the requested target.

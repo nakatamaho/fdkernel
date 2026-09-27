@@ -43,6 +43,11 @@ pc88va_stage2_entry:
     mov ss, ax
     mov sp, S2_STACK_POINTER
     cld
+%ifdef PC88VA_RUNTIME_LOADSEG
+    call pc88va_stage2_measure_workspace
+    or ax, ax
+    jnz pc88va_stage2_fail
+%endif
     mov si, pc88va_stage2_boot
     call pc88va_boot_load_core
 pc88va_stage2_fail:
@@ -52,6 +57,29 @@ pc88va_stage2_fail:
 pc88va_stage2_adapter:
 %define PC88VA_CALL_FLAGS pc88va_stage2_call_flags
     PC88VA_FIRMWARE_READ_ONE
+
+%ifdef PC88VA_RUNTIME_LOADSEG
+%include "m16_memory_probe.inc"
+; Preserve the qualified 256 KiB layout offsets relative to measured RAM top.
+; Loader code, stack and metadata remain in their bounded low-RAM intervals.
+pc88va_stage2_measure_workspace:
+    PC88VA_MEASURE_RAM
+    cmp ax, 256
+    jb .invalid
+    mov [pc88va_stage2_measured_kb], ax
+    mov cl, 6
+    shl ax, cl
+    sub ax, 1900h
+    mov [pc88va_stage2_file+FL_SEGMENT], ax
+    mov [pc88va_stage2_mz+MZ_FILE_SEGMENT], ax
+    mov [pc88va_stage2_mz+MZ_LOAD_SEGMENT], ax
+    xor ax, ax
+    ret
+.invalid:
+    mov ax, BOOT_CONTRACT
+    ret
+pc88va_stage2_measured_kb: dw 0
+%endif
 
 %include "disk_read.inc"
 %include "volume_validate.inc"

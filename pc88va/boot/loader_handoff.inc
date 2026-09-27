@@ -41,13 +41,17 @@ pc88va_loader_handoff_core:
     push cx
 %ifdef PC88VA_RUNTIME_LOADSEG
     ; BX selects the expanded image base (zero means profile default).
-    ; CX reports the fixed file staging segment for startup diagnostics.
+    ; CX reports the measured-RAM-derived file staging segment for startup diagnostics.
     mov bx, [pc88va_cfg_value]
     mov cx, [si+MZ_FILE_SEGMENT]
 %endif
     mov ds, ax
     mov es, ax
+%ifdef PC88VA_RUNTIME_LOADSEG
+    mov ax, [cs:pc88va_stage2_measured_kb]
+%else
     mov ax, 0
+%endif
 %ifndef PC88VA_RUNTIME_LOADSEG
     mov bx, 0
 %endif
