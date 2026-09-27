@@ -59,9 +59,9 @@ pc88va_boot_load_core:
     or ax, ax
     jnz .error
     mov word [ds:bp+BL_STAGE], 3
-    ; PC-88VA's hidden pre-kernel selector is intentionally much smaller
-    ; than CONFIG.SYS processing.  It may adjust only the initial KERNEL.SYS
-    ; file segment; all ordinary CONFIG.SYS directives remain kernel-owned.
+    ; The pre-kernel selector is intentionally smaller than CONFIG.SYS
+    ; processing. M16 passes the requested resident-kernel base to the
+    ; carrier; ordinary CONFIG.SYS directives remain kernel-owned.
     call pc88va_stage2_config_bootstrap
     or ax, ax
     jnz .error

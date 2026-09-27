@@ -404,7 +404,7 @@ STATIC void init_kernel(void)
          (ULONG)pc88va_image_segment() << 4, pc88va_image_segment());
   printf("Kernel file staging = %05lxh\n", (ULONG)m16_boot_layout.file_segment << 4);
   printf("Carrier = %05lxh\n", (ULONG)m16_boot_layout.carrier_segment << 4);
-  printf("Resident target = %05lxh\n", (ULONG)m13_layout.resident_text_segment << 4);
+  printf("Resident asm = %05lxh\n", (ULONG)m13_layout.resident_text_segment << 4);
   printf("INIT = %05lxh, %u bytes\n",
          (ULONG)m13_layout.init_segment << 4, m13_layout.init_bytes);
   printf("INIT stack = %05lxh-%05lxh\n",

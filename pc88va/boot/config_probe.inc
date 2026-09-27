@@ -2,8 +2,9 @@
 ; Bounded, side-effect-free PC-88VA pre-kernel CONFIG.SYS probe.
 ;
 ; This is deliberately not a second CONFIG.SYS interpreter.  Stage-2 reads
-; the file only far enough to recognize the private PC88VA_LOADSEG=hhhh
-; selector.  All ordinary CONFIG.SYS directives remain kernel-owned.
+; the file only far enough to recognize the PC88VA_LOADSEG=hhhh selector.
+; M16 passes the resident-kernel layout base to the carrier, preserving the
+; file buffer. All ordinary CONFIG.SYS directives remain kernel-owned.
 bits 16
 cpu 8086
 %include "loader_abi.inc"
