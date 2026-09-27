@@ -178,29 +178,6 @@ no_exec_error:
     global RES_READ
 RES_READ:
 %ifdef PC88VA
-        ; FAR Pascal: count, buffer offset:segment, fd.
-        push bp
-        mov bp,sp
-        push ds
-        push si
-        push di
-        push es
-        mov cx,[ss:bp+6]
-        lds dx,[ss:bp+8]
-        mov bx,[ss:bp+12]
-        mov ah,3fh
-        int 21h
-        jnc .read_ok
-        mov ax,-1
-.read_ok:
-        pop es
-        pop di
-        pop si
-        pop ds
-        pop bp
-        retf 8
-%else
-%ifdef PC88VA
         ; The medium-model caller pushes fd, buf, count and performs a FAR
         ; Pascal call.  BP+6 is count, BP+8 is the near buffer offset, and
         ; BP+10 is fd; the data pointer is interpreted in caller DS.
@@ -373,6 +350,29 @@ CLOSE:
 ;; UCOUNT read(int fd, void *buf, UCOUNT count); 
     global READ
 READ: 
+%ifdef PC88VA
+        ; FAR Pascal: count, buffer offset:segment, fd.
+        push bp
+        mov bp,sp
+        push ds
+        push si
+        push di
+        push es
+        mov cx,[ss:bp+6]
+        lds dx,[ss:bp+8]
+        mov bx,[ss:bp+12]
+        mov ah,3fh
+        int 21h
+        jnc .read_ok
+        mov ax,-1
+.read_ok:
+        pop es
+        pop di
+        pop si
+        pop ds
+        pop bp
+        retf 8
+%else
         pop ax         ; ret address
         popargs bx,dx,cx ; fd,buf,count
         push ax        ; ret address
