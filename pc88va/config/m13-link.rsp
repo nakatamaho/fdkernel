@@ -61,6 +61,7 @@ file build/machine_services.obj
 file build/console_input.obj
 file build/resident_disk.obj
 file build/stubs.obj
+file build/model_banner.obj
 library ../lib/device.lib
 library ../lib/libm.lib
 name build/KVA8616.exe

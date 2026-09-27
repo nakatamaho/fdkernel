@@ -249,7 +249,11 @@ build/m13_segments.obj: kernel/m13_segments.asm
 build/m13_segments.obj build/console_m13.obj build/m13_platform.obj build/machine_services.obj build/console_input.obj build/resident_disk.obj: kernel/m13_segments.inc
 build/kernel.obj build/main.obj build/config.obj build/inithma.obj: kernel/m13_layout.h
 
-build/KVA8616.exe: $(OBJECTS) build/m13_segments.obj build/m13_lifetime.obj build/platform.lib config/m13-link.rsp
+build/model_banner.obj: kernel/model_banner.asm
+	-mkdir -p build bin
+	$(NASM) $(NASMFLAGS) -o $@ kernel/model_banner.asm
+
+build/KVA8616.exe: build/model_banner.obj $(OBJECTS) build/m13_segments.obj build/m13_lifetime.obj build/platform.lib config/m13-link.rsp
 	$(LINKER) @config/m13-link.rsp
 
 bin/KERNEL.SYS: build/KVA8616.exe

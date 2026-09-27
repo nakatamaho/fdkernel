@@ -55,6 +55,9 @@ STATIC VOID InitIO(void);
 STATIC VOID update_dcb(struct dhdr FAR *);
 STATIC VOID init_kernel(VOID);
 STATIC VOID signon(VOID);
+#if defined(PC88VA)
+extern VOID ASMCFUNC pc88va_print_model(void);
+#endif
 STATIC VOID kernel(VOID);
 STATIC VOID FsConfig(VOID);
 STATIC VOID InitPrinters(VOID);
@@ -649,6 +652,7 @@ STATIC VOID signon()
      near pointer through DS, while the compiler may place this literal in a
      different segment. Adjacent C literals are concatenated at compile time. */
   printf("\rPC88VA kernel\nbuild: " PC88VA_BUILD_ID "\n");
+  pc88va_print_model();
 #else
   printf("\r%S"
          "Kernel compatibility %d.%d - "
