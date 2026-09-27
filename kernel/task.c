@@ -904,6 +904,7 @@ VOID ASMCFUNC P_0(struct config FAR *Config)
   exec_blk exb;
 #if defined(PC88VA)
   exec_blk FAR *exec_param;
+  extern BYTE *pc88va_boot_error;
 #endif
   UBYTE mode = Config->cfgP_0_startmode;
 #if defined(PC88VA) && defined(M13_VISIBLE_DIAGNOSTICS)
@@ -934,7 +935,7 @@ VOID ASMCFUNC P_0(struct config FAR *Config)
       (unsigned)(endp - Shell) > SHELL_CAPACITY - SHELL_RETRY_OVERHEAD)
     init_fatal("Shell command too long");
   if (pc88va_release_boot_memory() != SUCCESS)
-    init_fatal("PC88VA boot lifetime");
+    init_fatal(pc88va_boot_error ? pc88va_boot_error : "PC88VA boot lifetime");
 #endif
 
   for ( ; ; )   /* endless shell load loop - reboot or shut down to exit it! */

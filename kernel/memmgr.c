@@ -84,8 +84,8 @@ STATIC COUNT joinMCBs(seg para)
 
 #if defined(PC88VA)
 extern UWORD pc88va_boot_mcb, pc88va_boot_top;
-/* The VA fatal handler is resident, unlike the INIT formatter. */
-extern VOID init_fatal(BYTE *message);
+/* Resident reason retained for the caller; failures still return an error. */
+BYTE *pc88va_boot_error;
 
 /* Called once, on the permanent P_0 stack, after copying its configuration.
    No initialization code or early-buffer pointer may survive this barrier. */
@@ -100,29 +100,50 @@ COUNT pc88va_release_boot_memory(void)
   ULONG cds = ((ULONG)FP_SEG(CDSp) << 4) + FP_OFF(CDSp);
 
   if (pc88va_boot_mcb == 0)
-    init_fatal("PC88VA boot MCB missing");
+    {
+      pc88va_boot_error = "PC88VA boot MCB missing";
+      return DE_MCBDESTRY;
+    }
   if (_SS != FP_SEG((UWORD FAR *)&first_mcb))
-    init_fatal("PC88VA boot stack segment");
+    {
+      pc88va_boot_error = "PC88VA boot stack segment";
+      return DE_MCBDESTRY;
+    }
   if (buffers + (ULONG)LoL_nbuffers *
         (sizeof(struct buffer) - BUFFERSIZE + maxsecsize) > limit)
-    init_fatal("PC88VA boot buffers live");
+    {
+      pc88va_boot_error = "PC88VA boot buffers live";
+      return DE_MCBDESTRY;
+    }
   if (cds + (ULONG)lastdrive * sizeof(struct cds) > limit)
-    init_fatal("PC88VA boot CDS live");
+    {
+      pc88va_boot_error = "PC88VA boot CDS live";
+      return DE_MCBDESTRY;
+    }
   while (cur < pc88va_boot_mcb)
   {
     p = para2far(cur);
     next = (ULONG)cur + p->m_size + 1UL;
     if (p->m_type != MCB_NORMAL || next > pc88va_boot_mcb)
-      init_fatal("PC88VA boot MCB chain");
+      {
+        pc88va_boot_error = "PC88VA boot MCB chain";
+        return DE_MCBDESTRY;
+      }
     previous = cur;
     cur = (seg)next;
   }
   p = para2far(cur);
   if (cur != pc88va_boot_mcb || p->m_type != MCB_LAST || p->m_psp != 8 ||
       (ULONG)cur + p->m_size + 1UL != pc88va_boot_top)
-    init_fatal("PC88VA boot reservation");
+    {
+      pc88va_boot_error = "PC88VA boot reservation";
+      return DE_MCBDESTRY;
+    }
   if (DosMemFree(cur) != SUCCESS)
-    init_fatal("PC88VA boot free");
+    {
+      pc88va_boot_error = "PC88VA boot free";
+      return DE_MCBDESTRY;
+    }
   pc88va_boot_mcb = 0;
   if (previous != 0 && mcbFree(para2far(previous)))
     return joinMCBs(previous);
