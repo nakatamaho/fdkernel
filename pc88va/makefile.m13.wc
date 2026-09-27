@@ -154,7 +154,9 @@ build/prf.obj: ../kernel/prf.c
 	$(CC) $(CFLAGS) -fo=$@ ../kernel/prf.c
 build/iprf.obj: ../kernel/iprf.c
 	-mkdir -p build bin
-	$(CC) $(INIT_CFLAGS) -fo=$@ ../kernel/iprf.c
+	# INIT uses a separate SS; far pointers to its varargs/local buffers must
+	# retain SS rather than assuming the medium-model SS == DGROUP default.
+	$(CC) $(INIT_CFLAGS) -zu -fo=$@ ../kernel/iprf.c
 build/dyninit.obj: ../kernel/dyninit.c
 	-mkdir -p build bin
 	$(CC) $(INIT_CFLAGS) -fo=$@ ../kernel/dyninit.c
