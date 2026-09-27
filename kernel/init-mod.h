@@ -118,8 +118,12 @@ intvec getvec(unsigned char intno);
 #define NSTACKS         8       /* number of stacks             */
 #define STACKSIZE       256     /* default stacksize            */
 #define NLAST           5       /* last drive                   */
+#if defined(PC88VA)
+#define NUMBUFF         10      /* 10 KiB sector data; metadata is additional */
+#else
 #define NUMBUFF         20      /* Number of track buffers at INIT time     */
                                         /* -- must be at least 3        */
+#endif
 #define MAX_HARD_DRIVE  8
 #define NDEV            26      /* up to Z:                     */
 
