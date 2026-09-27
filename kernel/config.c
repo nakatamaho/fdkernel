@@ -692,6 +692,10 @@ STATIC seg prev_mcb(seg cur_mcb, seg start)
 
 STATIC void umb_init(void)
 {
+#if defined(PC88VA)
+  /* No VA UMB provider is selected by this configuration contract. */
+  return;
+#else
   INIT_LOCAL UCOUNT umb_seg, umb_size;
   seg umb_max;
   void far *xms_addr;
@@ -774,6 +778,7 @@ STATIC void umb_init(void)
     para2far(umb_max)->m_type = MCB_LAST;
     DebugPrintf(("UMB Allocation completed: start at 0x%x\n", umb_base_seg));
   }
+#endif
 }
 
 #ifdef MEMDISK_ARGS
@@ -1386,8 +1391,12 @@ STATIC void Config_Buffers(BYTE * pLine)
 
 STATIC void CfgBuffersHigh(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   Config_Buffers(pLine);
   printf("Note: BUFFERS will be in HMA or low RAM, not in UMB\n");
+#endif
 }
 
 /**
@@ -1395,6 +1404,9 @@ STATIC void CfgBuffersHigh(BYTE * pLine)
 */
 STATIC VOID sysScreenMode(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   INIT_LOCAL iregs r;
   COUNT nMode;
   COUNT nFunc = 0x11;
@@ -1418,6 +1430,7 @@ STATIC VOID sysScreenMode(BYTE * pLine)
   r.a.b.l = nMode;
   r.b.b.l = 0;
   init_call_intr(0x10, &r);
+#endif
 }
 
 STATIC VOID sysVersion(BYTE * pLine)
@@ -1460,8 +1473,12 @@ STATIC VOID Files(BYTE * pLine)
 
 STATIC VOID FilesHigh(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   Files(pLine);
   Config.cfgFilesHigh = 1;
+#endif
 }
 
 STATIC VOID CfgLastdrive(BYTE * pLine)
@@ -1485,9 +1502,13 @@ STATIC VOID CfgLastdrive(BYTE * pLine)
 
 STATIC VOID CfgLastdriveHigh(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   /* Format:   LASTDRIVEHIGH = letter         */
   CfgLastdrive(pLine);
   Config.cfgLastdriveHigh = 1;
+#endif
 }
 
 /*
@@ -1565,11 +1586,15 @@ STATIC VOID Dosmem(BYTE * pLine)
 
 STATIC VOID DosData(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   pLine = GetStringArg(pLine, szBuf);
   strupr(szBuf);
 
   if (memcmp(szBuf, "UMB", 3) == 0)
     Config.cfgDosDataUmb = TRUE;
+#endif
 }
 
 STATIC VOID CfgSwitchar(BYTE * pLine)
@@ -1672,6 +1697,9 @@ STATIC VOID Fcbs(BYTE * pLine)
 */
 STATIC VOID CfgKeyBuf(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   /*  Format:     KEYBUF = startoffset [,endoffset]    */
   UWORD FAR *keyfill = (UWORD FAR *) MK_FP(0x40, 0x1a);
   UWORD FAR *keyrange = (UWORD FAR *) MK_FP(0x40, 0x80);
@@ -1701,6 +1729,7 @@ STATIC VOID CfgKeyBuf(BYTE * pLine)
   keyrange[0] = startbuf;
   keyrange[1] = endbuf;
   keycheck();
+#endif
 }
 
 /*      LoadCountryInfo():
@@ -1913,14 +1942,22 @@ STATIC VOID Stacks(BYTE * pLine)
 
 STATIC VOID StacksHigh(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   Stacks(pLine);
   Config.cfgStacksHigh = 1;
+#endif
 }
 
 STATIC VOID InitPgmHigh(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   InitPgm(pLine);
   Config.cfgP_0_startmode = 0x80;
+#endif
 }
 
 STATIC VOID InitPgm(BYTE * pLine)
@@ -1953,6 +1990,9 @@ STATIC VOID CfgBreak(BYTE * pLine)
 
 STATIC VOID Numlock(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   /* Format:      NUMLOCK = (ON | OFF)      */
   BYTE FAR *keyflags = (BYTE FAR *) MK_FP(0x40, 0x17);
 
@@ -1961,10 +2001,14 @@ STATIC VOID Numlock(BYTE * pLine)
   *keyflags &= ~32;
   if (!strcaseequal(szBuf, "OFF")) *keyflags |= 32;
   keycheck();
+#endif
 }
 
 STATIC VOID DeviceHigh(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   if (UmbState == 1)
   {
     if (LoadDevice(pLine, MK_FP(umb_start + UMB_top, 0), TRUE) == DE_NOMEM)
@@ -1978,6 +2022,7 @@ STATIC VOID DeviceHigh(BYTE * pLine)
     printf("UMBs unavailable!\n");
     LoadDevice(pLine, lpTop, FALSE);
   }
+#endif
 }
 
 STATIC void Device(BYTE * pLine)
@@ -2555,6 +2600,10 @@ STATIC VOID CfgMenuEsc(BYTE * pLine)
 
 STATIC VOID DoMenu(void)
 {
+#if defined(PC88VA)
+  /* VA menu graphics require a native implementation. */
+  return;
+#else
   INIT_LOCAL iregs r;
   int key = -1;
   if (Menus == 0)
@@ -2673,10 +2722,14 @@ RestartInput:
   }
   if (MenuColor != -1)
     ClearScreen(0x7);
+#endif
 }
 
 STATIC VOID CfgMenuDefault(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   COUNT num = 0;
 
   pLine = skipwh(pLine);
@@ -2697,6 +2750,7 @@ STATIC VOID CfgMenuDefault(BYTE * pLine)
   {
     GetNumArg(++pLine, &MenuTimeout);
   }
+#endif
 }
 
 STATIC void ClearScreen(unsigned char attr)
@@ -2728,6 +2782,9 @@ STATIC void ClearScreen(unsigned char attr)
 */
 STATIC void CfgMenuColor(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   int num = 0;
   unsigned char fg, bg = 0;
 
@@ -2751,6 +2808,7 @@ STATIC void CfgMenuColor(BYTE * pLine)
     bg = (unsigned char)num;
   }
   ClearScreen((bg << 4) | fg);
+#endif
 }
 
 /*********************************************************************************
@@ -2922,7 +2980,11 @@ STATIC VOID CmdInstall(BYTE * pLine)
 }
 STATIC VOID CmdInstallHigh(BYTE * pLine)
 {
+#if defined(PC88VA)
+  CfgFailure(pLine);
+#else
   _CmdInstall(pLine,0x80);	/* load high, if possible */
+#endif
 }
 STATIC VOID CmdChain(BYTE * pLine)
 {
