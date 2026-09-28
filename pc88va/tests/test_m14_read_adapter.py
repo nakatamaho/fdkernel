@@ -28,13 +28,13 @@ class ReadAdapterTests(unittest.TestCase):
         helpers = adapter.split('; Install a validated per-drive BIOS/FDC profile for subsequent block I/O.\n', 1)[1].split('; Common driver read', 1)[0]
         code = 'FL_READ:\n' + adapter.split('FL_READ:\n', 1)[1].split('; COUNT fl_write', 1)[0]
         source_text = ('bits 16\ncpu 8086\norg 0\n%define PASCAL 1\n%define XCPU 86\n'
-                       '%include "stacks.inc"\n%include "loader_abi.inc"\n' + macro +
+                       '%include "stacks.inc"\n%include "loader_abi.inc"\n' + (TARGET / 'kernel/disk_buffer.inc').read_text() + macro +
                        'dw FL_READ, pc88va_kernel_disk_read_, pc88va_m12_request_, pc88va_m12_buffer_\n' + helpers + code +
                        '\npc88va_kernel_disk_read_: ret\n'
                        'pc88va_kernel_firmware_read_one_: retf\n'
                        'pc88va_m12_drive_context_: dw 0\n'
                        'pc88va_m12_request_: times 48 db 0\n'
-                       'pc88va_m12_buffer_: times 4096 db 0\n'
+                       'pc88va_m12_buffer_: times PC88VA_DISK_BUFFER_BYTES db 0\n'
                        'pc88va_m16_profiles_: dw 0023h,1280,8,2,1024,0023h,1280,8,2,1024\n')
         with tempfile.TemporaryDirectory(prefix="m14-read-adapter-") as directory:
             source, binary = Path(directory) / 'adapter.asm', Path(directory) / 'adapter.bin'

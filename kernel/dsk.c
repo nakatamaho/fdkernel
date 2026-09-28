@@ -402,12 +402,13 @@ STATIC WORD getbpb(ddt * pddt)
     {0x02, 40, 720, 9, 2, 512, 0xfd, 1},   /* 2D 360 KiB */
     {0x12, 80, 1280, 8, 2, 512, 0xfb, 1},  /* 2DD 640 KiB */
     {0x12, 80, 1440, 9, 2, 512, 0xf9, 1},  /* 2DD 720 KiB */
-    {0x22, 80, 2400, 15, 2, 512, 0xf1, 1}, /* 2HC 1.2 MiB */
+    {0x22, 80, 2400, 15, 2, 512, 0xf9, 1}, /* 2HC 1.2 MiB */
     {0x23, 80, 1280, 8, 2, 1024, 0xfe, 0}, /* existing M15 2HD */
     {0x23, 77, 1232, 8, 2, 1024, 0xfe, 0} /* 77-cylinder 2HD */
   };
   unsigned profile_index;
   UBYTE saw_read = FALSE;
+  UBYTE legacy_native = FALSE;
 
   /* pddt->ddt_descflags |= DF_NOACCESS;
    * disabled for now - problems with FORMAT ?? */
@@ -425,6 +426,7 @@ STATIC WORD getbpb(ddt * pddt)
     BYTE *raw_bpb = (BYTE *)&DiskTransferBuffer[BT_BPB];
     bpb observed;
     UBYTE signature;
+    UBYTE short_bpb;
 
     ret = pc88va_m16_probe_read(pddt->ddt_driveno, profile->mode,
                                 (UBYTE FAR *)DiskTransferBuffer);
@@ -434,6 +436,20 @@ STATIC WORD getbpb(ddt * pddt)
     signature = DiskTransferBuffer[0x1fe] == 0x55 &&
                 DiskTransferBuffer[0x1ff] == 0xaa;
     memcpy(&observed, raw_bpb, sizeof(observed));
+    short_bpb = DiskTransferBuffer[0x26] != 0x28 &&
+                DiskTransferBuffer[0x26] != 0x29;
+    if (short_bpb)
+    {
+      /* The native formatter stores a DOS-era BPB with a 16-bit hidden
+         sector field. Later bytes are IPL instructions, not extended fields. */
+      observed.bpb_hidden &= 0xffffUL;
+      observed.bpb_huge = 0;
+    }
+    /* A plausible BPB must pass the normal validator, never a fallback. */
+    if (profile->mode == 0x23 && observed.bpb_nbyte != 512 &&
+        observed.bpb_nbyte != 1024 && !signature &&
+        DiskTransferBuffer[0x26] != 0x28 && DiskTransferBuffer[0x26] != 0x29)
+      legacy_native = TRUE;
 
     if (observed.bpb_nbyte != profile->sector_bytes ||
         observed.bpb_nsize != profile->total || observed.bpb_huge != 0 ||
@@ -447,9 +463,9 @@ STATIC WORD getbpb(ddt * pddt)
         profile->total != profile->cylinders * profile->heads *
                           profile->sectors_per_track)
       continue;
-    if (profile->standard_signature && !signature)
+    if (profile->standard_signature && !signature && !short_bpb)
       continue;
-    if (!profile->standard_signature &&
+    if (!profile->standard_signature && !short_bpb &&
         ((DiskTransferBuffer[0x1fe] == 0x55) !=
          (DiskTransferBuffer[0x1ff] == 0xaa)))
       continue;
@@ -458,12 +474,67 @@ STATIC WORD getbpb(ddt * pddt)
                                profile->heads) != 0)
       continue;
 
+    if (short_bpb && !signature)
+    {
+      unsigned fat_copy;
+      ULONG lba;
+      for (fat_copy = 0; fat_copy < 2; fat_copy++)
+      {
+        lba = observed.bpb_nreserved +
+              (ULONG)fat_copy * observed.bpb_nfsect;
+        if (lba >= profile->total ||
+            fl_read(pddt->ddt_driveno,
+                    (UWORD)(lba / profile->sectors_per_track % 2),
+                    (UWORD)(lba / (profile->sectors_per_track * 2)),
+                    (UWORD)(lba % profile->sectors_per_track + 1), 1,
+                    (UBYTE FAR *)DiskTransferBuffer) != 0 ||
+            DiskTransferBuffer[0] != profile->media ||
+            DiskTransferBuffer[1] != 0xff || DiskTransferBuffer[2] != 0xff)
+          break;
+      }
+      if (fat_copy != 2 ||
+          fl_read(pddt->ddt_driveno, 1, profile->cylinders - 1,
+                  profile->sectors_per_track, 1,
+                  (UBYTE FAR *)DiskTransferBuffer) != 0)
+        continue;
+      /* The buffer no longer holds the IPL; never parse data as an EBPB. */
+      DiskTransferBuffer[0x26] = 0;
+    }
     memcpy(pbpbarray, &observed, sizeof(observed));
     pddt->ddt_ncyl = profile->cylinders;
     pddt->ddt_descflags &= ~DF_NOACCESS;
     goto read_extended_bpb;
   }
 
+  /* Native legacy FAT12 has no boot BPB.  Recognition is read-only while
+     DF_NOACCESS remains set: require both FAT reserved entries and the final
+     sector of the explicit native profile.  Do not infer a writable layout
+     from an unreadable boot sector or arbitrary unrecognized BPB fields. */
+  if (legacy_native &&
+      pc88va_m16_set_profile(pddt->ddt_driveno, 0x23, 1232, 8, 2) == 0)
+  {
+    static const bpb native_bpb = {1024, 1, 1, 2, 192, 1232,
+                                   0xfe, 2, 8, 2, 0, 0};
+    unsigned fat_sector;
+    for (fat_sector = 2; fat_sector <= 4; fat_sector += 2)
+    {
+      if (fl_read(pddt->ddt_driveno, 0, 0, fat_sector, 1,
+                  (UBYTE FAR *)DiskTransferBuffer) != 0 ||
+          DiskTransferBuffer[0] != 0xfe || DiskTransferBuffer[1] != 0xff ||
+          DiskTransferBuffer[2] != 0xff)
+        break;
+    }
+    if (fat_sector == 6 &&
+        fl_read(pddt->ddt_driveno, 1, 76, 8, 1,
+                (UBYTE FAR *)DiskTransferBuffer) == 0)
+    {
+      memcpy(pbpbarray, &native_bpb, sizeof(native_bpb));
+      pddt->ddt_descflags &= ~DF_NOACCESS;
+      /* The buffer now contains data, not an extended boot record. */
+      DiskTransferBuffer[0x26] = 0;
+      goto read_extended_bpb;
+    }
+  }
   pddt->ddt_descflags |= DF_DISKCHANGE;
   return saw_read ? failure(E_FAILURE) : failure(E_NOTRDY);
 #else
