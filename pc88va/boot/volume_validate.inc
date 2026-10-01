@@ -101,8 +101,26 @@ pc88va_volume_validate_core:
 .large_size:
     mov ax, [es:di+32]
 .size_ready:
+    ; The BPB may describe fewer whole cylinders of the same track geometry
+    ; (the NEC-compatible 77-cylinder 2HD form of an 80-cylinder profile).
+    ; Keep the disk record unchanged; the layout below uses the BPB total.
+    or ax, ax
+    jz .geometry
     cmp ax, [bx+RD_TOTAL_SECTORS]
-    jne .geometry
+    je .size_accepted
+    ja .geometry
+    push ax
+    mov cx, ax
+    mov ax, [bx+RD_SECTORS_TRACK]
+    mul word [bx+RD_HEADS]
+    xchg ax, cx
+    xor dx, dx
+    div cx
+    pop ax
+    or dx, dx
+    jnz .geometry
+.size_accepted:
+    mov [si+VP_DATA_CLUSTERS], ax       ; scratch: BPB total until computed
     cmp byte [es:di+16], 2
     jne .bpb
     xor ax, ax
@@ -170,10 +188,10 @@ pc88va_volume_validate_core:
     mov [si+VP_ROOT_START], ax
     add ax, [si+VP_ROOT_SECTORS]
     jc .layout
-    cmp ax, [bx+RD_TOTAL_SECTORS]
+    cmp ax, [si+VP_DATA_CLUSTERS]
     jae .layout
     mov [si+VP_DATA_START], ax
-    mov cx, [bx+RD_TOTAL_SECTORS]
+    mov cx, [si+VP_DATA_CLUSTERS]
     sub cx, ax
     mov ax, cx
     xor dx, dx

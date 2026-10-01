@@ -100,6 +100,18 @@ class VolumeTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(final[8:], (1024, 1, 1, 2, 2048, 5, 6, 192, 6144, 11, 1269, 0xfe, 1, 159))
 
+    def test_fewer_whole_cylinders_of_the_same_geometry(self):
+        image = boot_sector({(21, 1): 0xfe}, sector=1024, total=1232, spf=2, roots=192, spt=8)
+        status, final = self.execute(image, disk_updates={6: 1280, 7: 8, 9: 1024})
+        self.assertEqual(status, 0)
+        self.assertEqual(final[8:], (1024, 1, 1, 2, 2048, 5, 6, 192, 6144, 11, 1221, 0xfe, 1, 153))
+        for total in (1250, 1296):
+            with self.subTest(total=total):
+                image = boot_sector({(21, 1): 0xfe}, sector=1024, total=total, spf=2,
+                                    roots=192, spt=8)
+                self.assertEqual(
+                    self.execute(image, disk_updates={6: 1280, 7: 8, 9: 1024})[0], 54)
+
     def test_root_rounding_and_partial_final_cluster(self):
         status, final = self.execute(boot_sector(roots=17, spc=2))
         self.assertEqual(status, 0)
