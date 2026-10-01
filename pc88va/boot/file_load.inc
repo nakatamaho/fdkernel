@@ -89,8 +89,10 @@ pc88va_file_load_core:
     sub ax, [ds:bp+FL_DATA_START]
     xor dx, dx
     div word [ds:bp+FL_SECTORS_CLUSTER]
+    ; The validated volume may use fewer whole cylinders than the disk
+    ; profile (77 of 80); it must never extend beyond the disk.
     cmp ax, [di+FT_DATA_CLUSTERS]
-    jne .range
+    jb .range
     call pc88va_root_lookup_core
     jc .restore
     mov word [ds:bp+FL_STAGE], 4

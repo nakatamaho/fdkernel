@@ -44,8 +44,9 @@ class FileLoadTests(unittest.TestCase):
         cls.temporary.cleanup()
 
     def execute(self, file_size=1100, spc=1, links=None, updates=None, results=None,
-                missing=False, corrupt_copy=False):
-        disk = [1, 0, 1, 0x300, SCRATCH, 512, 5 + 10 * spc, 4, 2, 512,
+                missing=False, corrupt_copy=False, disk_total=None):
+        disk = [1, 0, 1, 0x300, SCRATCH, 512,
+                5 + 10 * spc if disk_total is None else disk_total, 4, 2, 512,
                 0x321, CALLBACK, CODE, 0] + [0] * 10
         fat = [1, 0x200, FAT, 32, 10, 2, 0, 0x500, VISITED, 512, 0, 0, 0]
         directory = [1, 0x100, ROOT, 1, 32, 10, 8192, 0, 0, 0]
@@ -158,6 +159,13 @@ class FileLoadTests(unittest.TestCase):
             with self.subTest(updates=updates):
                 status, calls, _, _ = self.execute(updates=updates)
                 self.assertEqual((status, calls), (expected, []))
+
+    def test_volume_may_use_fewer_whole_cylinders_than_the_disk(self):
+        status, calls, _, data = self.execute(disk_total=5 + 10 + 8)
+        self.assertEqual((status, calls), (0, [5, 7, 6]))
+        self.assertEqual(data[:512], b"\x05" * 512)
+        status, calls, _, _ = self.execute(disk_total=5 + 9)
+        self.assertEqual((status, calls), (31, []))
 
     def test_copy_bytecheck_detects_corruption(self):
         status, calls, final, _ = self.execute(corrupt_copy=True)
