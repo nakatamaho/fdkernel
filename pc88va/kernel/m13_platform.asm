@@ -203,8 +203,8 @@ FL_RESET:
 
 ; COUNT fl_diskchanged(WORD drive): ask the VA BIOS for its change status.
 ; AH=09h reports CF clear when the current medium is usable and CF set when
-; the controller cannot establish that it is unchanged.  The common driver
-; deliberately treats the latter as a conservative revalidation request.
+; the controller cannot establish that it is unchanged. Return -1 for that
+; uncertainty, not 1 (confirmed change), so the block driver can revalidate.
 global FL_DISKCHANGED
 FL_DISKCHANGED:
         push bp
@@ -219,7 +219,7 @@ FL_DISKCHANGED:
         pop bp
         retf 2
 .changed:
-        mov ax, 1
+        mov ax, -1
         pop bp
         retf 2
 

@@ -259,6 +259,11 @@ STATIC WORD diskchange(ddt * pddt)
       return M_CHANGED;
     else if (result == 0)
       return M_NOT_CHANGED;
+#if defined(PC88VA)
+    /* An uncertain VA firmware result needs a probe now, even just after I/O.
+       The elapsed-time fallback must not hide a possible replacement. */
+    return M_DONT_KNOW;
+#endif
   }
 
   /* can not detect or error... */
@@ -281,6 +286,7 @@ STATIC WORD mediachk(rqptr rp, ddt * pddt)
   else
   {
     rp->r_mcretcode = diskchange(pddt);
+#if !defined(PC88VA)
     if (rp->r_mcretcode == M_DONT_KNOW)
     {
       /* don't know but can check serial number ... */
@@ -291,7 +297,33 @@ STATIC WORD mediachk(rqptr rp, ddt * pddt)
       if (serialno != pddt->ddt_serialno)
         rp->r_mcretcode = M_CHANGED;
     }
+#endif
   }
+#if defined(PC88VA)
+  if (rp->r_mcretcode == M_DONT_KNOW)
+  {
+    /* Requests are synchronous and getbpb does not call INT24. Keep this
+       snapshot in DGROUP: a driver can also be entered with SS != DS.
+       A matching nonzero DOS volume ID and complete BPB preserve the binding;
+       absent identity stays uncertain, and errors must not become success. */
+    static bpb previous_bpb;
+    ULONG serialno = pddt->ddt_serialno;
+    COUNT result;
+    memcpy(&previous_bpb, &pddt->ddt_bpb, sizeof(bpb));
+    result = getbpb(pddt);
+    if (result != 0)
+      return result;
+    if (serialno != pddt->ddt_serialno ||
+        memcmp(&previous_bpb, &pddt->ddt_bpb, sizeof(bpb)) != 0)
+      rp->r_mcretcode = M_CHANGED;
+    else if (serialno != 0)
+    {
+      rp->r_mcretcode = M_NOT_CHANGED;
+      pddt->ddt_descflags &= ~DF_DISKCHANGE;
+      tmark(pddt);
+    }
+  }
+#endif
   return S_DONE;
 }
 
